@@ -114,25 +114,74 @@ export function discardChoice(hand6, t) {
   })[0];
 }
 
-export function botCall1(s, seat) {
+export function botCall1(s, seat, level = 'solid') {
+  if (level === 'novice') {
+    // orders on any two trump, blind to who gets the upcard
+    const evalHand = seat === s.dealer ? [...s.hands[seat], s.upcard] : s.hands[seat];
+    return suitStrength(evalHand, s.upcard[1]).tc >= 2 ? 'order' : 'pass';
+  }
   return evalCall1(s.hands[seat], seat, s.dealer, s.upcard).action;
 }
-export function botCall2(s, seat) {
-  const v = evalCall2(s.hands[seat], seat, s.dealer, s.upcard);
-  return v.action;
+export function botCall2(s, seat, level = 'solid') {
+  if (level === 'novice') {
+    const opts = SUITS.filter(su => su !== s.upcard[1]);
+    const best = opts.sort((a, b) => suitStrength(s.hands[seat], b).tc - suitStrength(s.hands[seat], a).tc)[0];
+    if (suitStrength(s.hands[seat], best).tc >= 2 || seat === s.dealer) return best;
+    return 'pass';
+  }
+  return evalCall2(s.hands[seat], seat, s.dealer, s.upcard).action;
 }
 
-export function botPlay(s, seat) {
+// Strongest trump nobody has seen (outside my hand). The buried dealer card
+// stays hidden, so this is what a human at the table can actually know.
+function bossTrumpOut(s, myHand) {
+  const seen = new Set([...(s.history || []).flatMap(h => h.cards), ...s.trick, ...myHand]);
+  const t = s.trump;
+  const ladder = ['J' + t, 'J' + COLOR_MATE[t], 'A' + t, 'K' + t, 'Q' + t, 'T' + t, '9' + t];
+  return ladder.find(c => !seen.has(c)) || null;
+}
+
+export function botPlay(s, seat, level = 'solid') {
+  return adviseMove(s, seat, level).card;
+}
+
+export function adviseMove(s, seat, level = 'expert') {
   const legal = legalMoves(s, seat);
-  if (legal.length === 1) return legal[0];
+  if (legal.length === 1) return { card: legal[0], why: 'Forced: your only legal card.' };
   const t = s.trump;
   const myTeam = teamOf(seat);
   const makerSide = myTeam === teamOf(s.maker);
+  const high = cards => [...cards].sort((a, b) =>
+    (isTrump(b, t) ? 1 : 0) - (isTrump(a, t) ? 1 : 0) ||
+    (isTrump(a, t) && isTrump(b, t) ? trumpPower(a, t) - trumpPower(b, t) : RANKS.indexOf(a[0]) - RANKS.indexOf(b[0])))[0];
+  const low = cards => [...cards].sort((a, b) =>
+    (isTrump(a, t) ? 1 : 0) - (isTrump(b, t) ? 1 : 0) ||
+    (isTrump(a, t) ? trumpPower(b, t) - trumpPower(a, t) : RANKS.indexOf(b[0]) - RANKS.indexOf(a[0])))[0];
+
+  if (level === 'novice') {
+    if (s.trick.length === 0) return { card: high(legal), why: 'Novice habit: lead the biggest card.' };
+    const winIdx = trickWinner(s.trick, t);
+    const winners = legal.filter(c => beats(s.trick[winIdx], c, t));
+    if (winners.length) return { card: high(winners), why: 'Novice habit: win big, even over a partner.' };
+    return { card: low(legal), why: 'Cannot win: throw the smallest.' };
+  }
 
   if (s.trick.length === 0) {
+    if (level === 'expert' && makerSide) {
+      const boss = bossTrumpOut(s, s.hands[seat]);
+      const myTr = legal.filter(c => isTrump(c, t)).sort((a, b) => trumpPower(a, t) - trumpPower(b, t));
+      if (myTr.length && (!boss || trumpPower(myTr[0], t) < trumpPower(boss, t))) {
+        return { card: myTr[0], why: `${myTr[0]} is the boss trump still out: a free trick that keeps pulling theirs.` };
+      }
+      if (!myTr.length) {
+        const aces = legal.filter(c => c[0] === 'A');
+        if (aces.length) return { card: aces[0], why: 'Trump is done: cash the aces while they live.' };
+      }
+    }
     const { grades } = gradeLeads(legal, makerSide ? 'maker' : 'defender', t);
-    return [...legal].sort((a, b) => TIERS.indexOf(grades[a][0]) - TIERS.indexOf(grades[b][0]) ||
+    const card = [...legal].sort((a, b) => TIERS.indexOf(grades[a][0]) - TIERS.indexOf(grades[b][0]) ||
       (isTrump(a, t) && isTrump(b, t) ? trumpPower(a, t) - trumpPower(b, t) : RANKS.indexOf(a[0]) - RANKS.indexOf(b[0])))[0];
+    return { card, why: grades[card][1] };
   }
 
   const winIdx = trickWinner(s.trick, t);
@@ -141,15 +190,19 @@ export function botPlay(s, seat) {
   const partnerWinning = teamOf(winnerSeat) === myTeam;
   const last = s.trick.length === (s.sitout === null ? 3 : 2);
   const winners = legal.filter(c => beats(winCard, c, t));
-  const low = cards => [...cards].sort((a, b) =>
-    (isTrump(a, t) ? 1 : 0) - (isTrump(b, t) ? 1 : 0) ||
-    (isTrump(a, t) ? trumpPower(b, t) - trumpPower(a, t) : RANKS.indexOf(b[0]) - RANKS.indexOf(a[0])))[0];
 
-  if (partnerWinning && (last || isTrump(winCard, t) || winCard[0] === 'A')) return low(legal);
+  if (partnerWinning && (last || isTrump(winCard, t) || winCard[0] === 'A')) {
+    return { card: low(legal), why: 'Your partner has this trick: never waste a card over a winning partner.' };
+  }
   if (winners.length) {
-    return winners.sort((a, b) =>
+    const cheap = winners.sort((a, b) =>
       (isTrump(a, t) ? 1 : 0) - (isTrump(b, t) ? 1 : 0) ||
       (isTrump(a, t) ? trumpPower(b, t) - trumpPower(a, t) : RANKS.indexOf(b[0]) - RANKS.indexOf(a[0])))[0];
+    return {
+      card: cheap,
+      why: isTrump(cheap, t) ? 'Take it with your smallest trump that wins: third hand plays high, but no higher than needed.'
+        : 'Win it without trump: save the trump for when it is forced.',
+    };
   }
-  return low(legal);
+  return { card: low(legal), why: 'Cannot win: shed your weakest card and keep the trump story hidden.' };
 }

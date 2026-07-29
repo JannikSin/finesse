@@ -70,6 +70,7 @@ export function newHand(dealer, rng = Math.random) {
     buried: [],
     leader: first, trick: [], trickSeats: [], trickNo: 0,
     taken: [[], [], [], [], []],
+    history: [], // completed tricks: {cards, seats, winner} — public info for honest bots
   };
 }
 
@@ -166,6 +167,7 @@ export function playCard(s, seat, card) {
   if (s.trick.length === 5) {
     const w = s.trickSeats[trickWinner(s.trick)];
     s.taken[w].push(...s.trick);
+    s.history.push({ cards: [...s.trick], seats: [...s.trickSeats], winner: w });
     s.lastTrickWinner = w;
     s.trick = [];
     s.trickSeats = [];

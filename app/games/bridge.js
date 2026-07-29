@@ -2,7 +2,11 @@
 // full-auction table vs bots with dummy play, leveled study.
 import { html } from 'htm/preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
-import { Card, Hand, GLYPH, rankLabel, frenchView } from '../cards.js';
+import {
+  Card, Hand, GLYPH, rankLabel, frenchView,
+  getLevelPref, setLevelPref, getCoachPref, setCoachPref, levelForSeat,
+  TableControls, CoachNote,
+} from '../cards.js';
 import {
   deal, hcp, newAuction, legalCalls, makeCall, currentTurn,
   legalMoves, playCard, isBid, bidRank,
@@ -10,6 +14,7 @@ import {
 import {
   openingBid, responseTo, staymanReply, transferReply, blackwoodReply,
   botCall, botPlay, gradeLeads, callLabel, aces as countAces,
+  adviseCall, adviseMove,
 } from './bridge.bid.js';
 import { STUDY } from './bridge.study.js';
 
@@ -146,10 +151,16 @@ const NAMES = ['You', 'Fly', 'Moss', 'Bella']; // Moss is your partner (North)
 function Table({ onResult }) {
   const [, redraw] = useState(0);
   const ref = useRef(null);
-  if (!ref.current) ref.current = { a: newAuction(0, deal()), dealer: 0, scores: [0, 0], showTrick: null };
+  if (!ref.current) {
+    ref.current = {
+      a: newAuction(0, deal()), dealer: 0, scores: [0, 0], showTrick: null,
+      pref: getLevelPref(), coach: getCoachPref(), seed: 0,
+    };
+  }
   const g = ref.current;
   const a = g.a;
   const bump = () => redraw(n => n + 1);
+  const lvl = seat => levelForSeat(g.pref, seat, g.seed);
 
   const declSide = a.contract ? a.contract.declarer % 2 : null;
   const iControl = seat => seat === 0 || (a.contract && a.contract.declarer === 0 && seat === 2);
@@ -170,12 +181,12 @@ function Table({ onResult }) {
   useEffect(() => {
     const t = setTimeout(() => {
       if (g.showTrick) { g.showTrick = null; bump(); return; }
-      if (a.phase === 'auction' && a.turn !== 0) { makeCall(a, a.turn, botCall(a, a.turn)); bump(); }
+      if (a.phase === 'auction' && a.turn !== 0) { makeCall(a, a.turn, botCall(a, a.turn, lvl(a.turn))); bump(); }
       else if (a.phase === 'passout') { g.a = newAuction((g.dealer + 1) % 4, deal()); g.dealer = (g.dealer + 1) % 4; bump(); }
       else if (a.phase === 'play') {
         const seat = currentTurn(a);
         const humanTurn = seat === 0 ? !humanIsDummy : (seat === 2 && a.contract.declarer === 0);
-        if (!humanTurn) { playCard(a, seat, botPlay(a, seat)); afterPlay(); bump(); }
+        if (!humanTurn) { playCard(a, seat, botPlay(a, seat, lvl(seat))); afterPlay(); bump(); }
       }
     }, g.showTrick ? 1100 : 420);
     return () => clearTimeout(t);
@@ -231,6 +242,17 @@ function Table({ onResult }) {
     </div>`}
     ${humanIsDummy && a.phase === 'play' && html`<p class="scene">You are dummy: ${NAMES[a.contract.declarer]} plays both hands. Watch and learn.</p>`}
 
+    ${myCall && g.coach && (() => {
+      const adv = adviseCall(a, 0);
+      return html`<${CoachNote} text=${`SAYC: ${callLabel(adv.call)}. ${adv.why}`} />`;
+    })()}
+    ${myPlaySeat !== null && g.coach && (() => {
+      const adv = adviseMove(a, myPlaySeat, 'expert');
+      return html`<${CoachNote} text=${`${myPlaySeat === 2 ? 'Dummy: ' : ''}${rankLabel(adv.card[0])}${GLYPH[adv.card[1]]}: ${adv.why}`} />`;
+    })()}
+    <${TableControls} pref=${g.pref} coach=${g.coach}
+      onLevel=${l => { g.pref = l; setLevelPref(l); g.seed = (g.seed + 1) % 3; bump(); }}
+      onCoach=${on => { g.coach = on; setCoachPref(on); bump(); }} />
     <div class="me ${myPlaySeat === 0 || myCall ? 'turn' : ''}">
       <span>You${a.contract && a.contract.declarer === 0 ? ' · declarer' : ''}${dummySeat === 0 ? ' · dummy' : ''} · Moss is your partner</span>
       <span class="score">${a.phase === 'play' || a.phase === 'done' ? `trick ${Math.min(a.trickNo + 1, 13)}/13` : `${hcp(a.hands[0])} HCP`}</span>

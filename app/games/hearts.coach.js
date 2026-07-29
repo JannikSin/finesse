@@ -40,22 +40,54 @@ export function bestPass(hand) {
     .map(x => x.c);
 }
 
-export function botPass(hand) { return bestPass(hand); }
+export function botPass(hand, level = 'solid') {
+  if (level === 'novice') {
+    // ships the three biggest cards, guards and all: the classic beginner pass
+    return [...hand].sort((a, b) => rankIdx(b) - rankIdx(a)).slice(0, 3);
+  }
+  return bestPass(hand);
+}
 
-export function botPlay(s, seat) {
+const trickPoints = trick => trick.reduce((n, c) => n + (c === 'QS' ? 13 : c[1] === 'H' ? 1 : 0), 0);
+const pilePoints = pile => pile.reduce((n, c) => n + (c === 'QS' ? 13 : c[1] === 'H' ? 1 : 0), 0);
+
+// A shooter is loose: one OTHER player owns every point taken so far.
+function moonThreat(s, seat) {
+  const pts = s.taken.map(pilePoints);
+  const total = pts.reduce((a, b) => a + b, 0);
+  if (total < 6) return -1;
+  const owner = pts.findIndex(p => p === total);
+  return owner >= 0 && owner !== seat ? owner : -1;
+}
+
+export function botPlay(s, seat, level = 'solid') {
+  return adviseMove(s, seat, level).card;
+}
+
+export function adviseMove(s, seat, level = 'expert') {
   const legal = legalMoves(s, seat);
-  if (legal.length === 1) return legal[0];
+  if (legal.length === 1) return { card: legal[0], why: 'Forced: your only legal card.' };
   const hand = s.hands[seat];
   const high = cards => [...cards].sort((a, b) => rankIdx(b) - rankIdx(a))[0];
   const low = cards => [...cards].sort((a, b) => rankIdx(a) - rankIdx(b))[0];
 
+  if (level === 'novice') {
+    if (s.trick.length === 0) return { card: high(legal), why: 'Novice habit: lead the biggest card.' };
+    const led = s.trick[0][1];
+    const follow = legal.filter(c => c[1] === led);
+    if (follow.length) return { card: high(follow), why: 'Novice habit: play high, win tricks, eat points.' };
+    if (legal.includes('QS')) return { card: 'QS', why: 'Void: at least the queen goes.' };
+    return { card: high(legal), why: 'Void: throw a big one.' };
+  }
+
   if (s.trick.length === 0) {
-    // Flush the queen with low spades if we don't hold her; otherwise lead low.
     const qsOut = !s.taken.flat().includes('QS') && !hand.includes('QS');
     const spadeGuards = legal.filter(c => c[1] === 'S' && rankIdx(c) < rankIdx('QS'));
-    if (qsOut && spadeGuards.length) return low(spadeGuards);
+    if (qsOut && spadeGuards.length) {
+      return { card: low(spadeGuards), why: 'The queen is still out and you do not hold her: lead low spades, someone has to eat her.' };
+    }
     const safe = legal.filter(c => c[1] !== 'H' && c !== 'QS' && !(c[1] === 'S' && rankIdx(c) > rankIdx('QS')));
-    return low(safe.length ? safe : legal);
+    return { card: low(safe.length ? safe : legal), why: 'Lead low and stay off the hook: whoever wins is on lead into the pain.' };
   }
 
   const led = s.trick[0][1];
@@ -65,18 +97,32 @@ export function botPlay(s, seat) {
     const winRank = rankIdx(s.trick[winIdx]);
     const under = follow.filter(c => rankIdx(c) < winRank);
     const last = s.trick.length === 3;
-    const trickPts = s.trick.reduce((n, c) => n + (c === 'QS' ? 13 : c[1] === 'H' ? 1 : 0), 0);
-    if (under.length) return high(under); // duck as high as possible
-    if (last && trickPts === 0) return high(follow.filter(c => c !== 'QS')) || high(follow);
-    return low(follow.filter(c => c !== 'QS')) || low(follow);
+    const pts = trickPoints(s.trick);
+    // Expert moon defense: spend a point to save 26.
+    if (level === 'expert' && pts > 0) {
+      const shooter = moonThreat(s, seat);
+      if (shooter >= 0 && s.trickSeats[winIdx] === shooter) {
+        const over = follow.filter(c => rankIdx(c) > winRank);
+        if (over.length) {
+          return { card: low(over), why: 'Moon alert: one player owns every point so far. Take this trick — one heart now beats 26 later.' };
+        }
+      }
+    }
+    if (under.length) return { card: high(under), why: 'Duck as high as you can: the biggest card that still loses is pure profit.' };
+    if (last && pts === 0) {
+      const c = high(follow.filter(x => x !== 'QS')) || high(follow);
+      return { card: c, why: 'Last to a clean trick: win it with your biggest, that card was a liability anyway.' };
+    }
+    return { card: low(follow.filter(x => x !== 'QS')) || low(follow), why: 'You must win or risk it: play as small as possible.' };
   }
-  // Void: dump the queen, then bare high spades, then high hearts, then highest.
-  if (legal.includes('QS')) return 'QS';
+  if (legal.includes('QS')) return { card: 'QS', why: 'Void in the led suit: the queen leaves NOW. Thirteen points on someone else.' };
   const highSpade = legal.filter(c => c === 'AS' || c === 'KS');
-  if (highSpade.length && !s.taken.flat().includes('QS') && !hand.includes('QS')) return high(highSpade);
+  if (highSpade.length && !s.taken.flat().includes('QS') && !hand.includes('QS')) {
+    return { card: high(highSpade), why: 'Queen-bait spades: shed the ace or king before a spade lead forces them to eat her.' };
+  }
   const hearts = legal.filter(c => c[1] === 'H');
-  if (hearts.length) return high(hearts);
-  return high(legal);
+  if (hearts.length) return { card: high(hearts), why: 'Void: unload your highest heart onto their trick.' };
+  return { card: high(legal), why: 'Void: throw your most dangerous card while it costs nothing.' };
 }
 
 export { currentTurn };

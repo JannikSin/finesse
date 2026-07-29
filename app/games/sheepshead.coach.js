@@ -1,18 +1,28 @@
-// Strategy layer: pick/pass verdicts, bury suggestions, lead grading, bot play.
-// Criteria distilled from sheepshead.org, playsheepshead.org, sheepsheadrules.com
-// (Wergin-school 5-handed guidelines). ZERO imports except engine.
+// Strategy layer: pick/pass verdicts, bury suggestions, lead grading, and
+// leveled bots (novice / solid / expert) that play from PUBLIC information
+// only — no bot reads hidden team membership. Knowledge model:
+//   - the partner bot knows both sides (it holds the called ace: legitimate);
+//   - the picker knows the partner only once the ace flips; the EXPERT picker
+//     infers a probable partner earlier from schmears and trump leads;
+//   - defenders know the picker, know the partner once flipped, and otherwise
+//     apply the book's "when in doubt, schmear" toward non-picker winners;
+//     the EXPERT defender discounts seats showing partner tells.
+// Criteria distilled from sheepshead.org (Ten Commandments), playsheepshead.org,
+// sheepsheadrules.com. Imports engine only.
 
 import {
-  FAIL_SUITS, isTrump, suitOf, effSuit, points, handPoints, trumpPower,
+  TRUMP, FAIL_SUITS, isTrump, suitOf, effSuit, points, handPoints, trumpPower,
   legalMoves, currentTurn, trickWinner, beats, callableSuits, sortHand,
 } from './sheepshead.engine.js';
+
+export const LEVELS = ['novice', 'solid', 'expert'];
 
 const trumps = h => h.filter(isTrump);
 const queens = h => h.filter(c => c[0] === 'Q');
 const failsOf = (h, su) => h.filter(c => !isTrump(c) && c[1] === su);
 const buryFodder = h => h.filter(c => !isTrump(c) && (c[0] === 'A' || c[0] === 'T'));
 
-// seatPos: 0 = first to pick (left of dealer) ... 4 = dealer (last, leaster looms).
+// ---- pick evaluation (the drill's coach: book-accurate) --------------------
 export function evalPick(hand, seatPos) {
   const t = trumps(hand).length;
   const q = queens(hand).length;
@@ -44,10 +54,9 @@ export function evalPick(hand, seatPos) {
   return { verdict, reasons, trump: t, queens: q, buryable: bp };
 }
 
-// Given the 8-card post-blind hand, choose 2 to bury and a suit to call.
+// ---- bury ------------------------------------------------------------------
 export function suggestBury(hand8) {
   const reasons = [];
-  // Call the shortest fail suit we hold without its ace; prefer retaining one card.
   const options = callableSuits(hand8, []);
   let calledSuit = null;
   if (options.length) {
@@ -57,13 +66,11 @@ export function suggestBury(hand8) {
     reasons.push('No callable suit (you hold every fail ace or no off-ace fail card): go alone.');
   }
   const keep = calledSuit ? failsOf(hand8, calledSuit).sort((a, b) => points(a) - points(b))[0] : null;
-  // Bury the fattest fail cards we are allowed to lose; keep the hold card.
   const candidates = hand8
     .filter(c => !isTrump(c) && c !== keep)
     .sort((a, b) => points(b) - points(a) || failsOf(hand8, suitOf(a)).length - failsOf(hand8, suitOf(b)).length);
   const bury = candidates.slice(0, 2);
   while (bury.length < 2) {
-    // Nearly all trump: bury from the bottom of the trump ladder.
     const low = trumps(hand8).filter(c => !bury.includes(c)).sort((a, b) => trumpPower(b) - trumpPower(a))[0];
     bury.push(low);
     reasons.push('Short on fail: bury low trump rather than break your hold card.');
@@ -75,9 +82,23 @@ export function suggestBury(hand8) {
   return { bury, calledSuit, reasons };
 }
 
+// Novice bury: the classic beginner error — hoards the aces, buries junk.
+export function noviceBury(hand8) {
+  const options = callableSuits(hand8, []);
+  const calledSuit = options[0] || null;
+  const keep = calledSuit ? failsOf(hand8, calledSuit).sort((a, b) => points(a) - points(b))[0] : null;
+  const bury = hand8
+    .filter(c => !isTrump(c) && c !== keep)
+    .sort((a, b) => points(a) - points(b)) // lowest points first: wrong on purpose
+    .slice(0, 2);
+  while (bury.length < 2) {
+    const low = trumps(hand8).filter(c => !bury.includes(c)).sort((a, b) => trumpPower(b) - trumpPower(a))[0];
+    bury.push(low);
+  }
+  return { bury, calledSuit };
+}
+
 // ---- lead grading ----------------------------------------------------------
-// Grade every card in hand for the opening lead, given the role.
-// Tiers: best > good > okay > bad > terrible.
 const TIERS = ['best', 'good', 'okay', 'bad', 'terrible'];
 
 export function gradeLeads(hand, role, calledSuit) {
@@ -108,60 +129,175 @@ export function gradeLeads(hand, role, calledSuit) {
   return { grades: g, bestTier };
 }
 
-// ---- bot policy ------------------------------------------------------------
-// ponytail: bots read true team membership from state before the ace is flipped;
-// belief-tracking inference if the cheat ever shows at the table.
+// ---- public-information helpers -------------------------------------------
+const seenCards = s => [...s.taken.flat(), ...s.trick];
 
-const sideOf = (s, seat) => (seat === s.picker || seat === s.partner) ? 'P' : 'D';
+// Strongest trump not yet seen and not in my hand. May secretly sit in the
+// bury, so this is an upper bound on the danger — exactly what a human knows.
+export function bossOut(s, myHand) {
+  const seen = new Set([...seenCards(s), ...myHand]);
+  return TRUMP.find(c => !seen.has(c)) || null;
+}
 
-export function botPickDecision(s, seat) {
+// Expert inference: which seat LOOKS like the picker's partner, from public
+// play. Tells: schmeared big points onto a picker-won trick while not
+// following suit, or led trump without being the picker.
+export function probablePartner(s) {
+  if (s.aceFlipped) return s.partner;
+  for (const t of s.history) {
+    if (t.winner !== s.picker) continue;
+    for (let i = 0; i < 5; i++) {
+      const seat = t.seats[i];
+      if (seat === s.picker) continue;
+      if (points(t.cards[i]) >= 10 && effSuit(t.cards[i]) !== effSuit(t.cards[0])) return seat;
+    }
+  }
+  for (const t of s.history) {
+    if (t.seats[0] !== s.picker && isTrump(t.cards[0])) return t.seats[0];
+  }
+  return null;
+}
+
+// What `seat` knows about whether `other` is on its team.
+// Returns 'mate' | 'enemy' | 'unknown'. Never reads hidden state.
+export function knownSide(s, seat, other, level) {
+  if (seat === other) return 'mate';
+  if (seat === s.partner) {
+    // holder of the called ace legitimately knows both teams
+    return other === s.picker ? 'mate' : 'enemy';
+  }
+  if (seat === s.picker) {
+    if (s.aceFlipped) return other === s.partner ? 'mate' : 'enemy';
+    if (s.alone) return 'enemy';
+    if (level === 'expert' && probablePartner(s) === other) return 'mate';
+    return 'unknown';
+  }
+  // defender
+  if (other === s.picker || (s.aceFlipped && other === s.partner)) return 'enemy';
+  if (s.aceFlipped || s.alone) return 'mate'; // partner revealed: the rest are defenders
+  if (level === 'expert' && probablePartner(s) === other) return 'enemy';
+  return 'unknown';
+}
+
+// ---- bots ------------------------------------------------------------------
+export function botPickDecision(s, seat, level = 'solid') {
   const seatPos = (seat - (s.dealer + 1) + 5) % 5;
-  const v = evalPick(s.hands[seat], seatPos).verdict;
+  const hand = s.hands[seat];
+  if (level === 'novice') {
+    // ignores position, picks on shiny queens with thin support
+    return queens(hand).length >= 1 && trumps(hand).length >= 3;
+  }
+  const v = evalPick(hand, seatPos).verdict;
+  if (level === 'expert') return v === 'pick' || v === 'either';
   return v === 'pick' || (v === 'either' && seatPos === 4);
 }
 
-export function botPlay(s, seat) {
-  const legal = legalMoves(s, seat);
-  if (legal.length === 1) return legal[0];
-  const me = sideOf(s, seat);
+export function botBuryChoice(s, level = 'solid') {
+  return level === 'novice' ? noviceBury(s.hands[s.picker]) : suggestBury(s.hands[s.picker]);
+}
 
+export function botPlay(s, seat, level = 'solid') {
+  return adviseMove(s, seat, level).card;
+}
+
+// The one brain: returns {card, why}. Bots take the card; the human coach
+// shows both. Level changes depth, never legality.
+export function adviseMove(s, seat, level = 'expert') {
+  const legal = legalMoves(s, seat);
+  if (legal.length === 1) return { card: legal[0], why: 'Forced: your only legal card.' };
+  const hand = s.hands[seat];
+  const role = seat === s.picker ? 'picker' : seat === s.partner ? 'partner' : 'defender';
+
+  const lowRank = cards => [...cards].sort((a, b) =>
+    points(a) - points(b) ||
+    (isTrump(a) ? 1 : 0) - (isTrump(b) ? 1 : 0) ||
+    trumpPower(b) - trumpPower(a))[0];
+
+  if (level === 'novice') {
+    if (s.trick.length === 0) {
+      const c = [...legal].sort((a, b) => (isTrump(a) && isTrump(b) ? trumpPower(a) - trumpPower(b) : points(b) - points(a)))[0];
+      return { card: c, why: 'Novice habit: lead the biggest thing you hold.' };
+    }
+    const winIdx = trickWinner(s.trick);
+    const winners = legal.filter(c => beats(s.trick[winIdx], c));
+    if (winners.length) {
+      const c = winners.sort((a, b) => trumpPower(a) - trumpPower(b))[0];
+      return { card: c, why: 'Novice habit: win it with the biggest winner, queens first.' };
+    }
+    return { card: lowRank(legal), why: 'Cannot win: throw the smallest card.' };
+  }
+
+  // ---- solid / expert ----
   if (s.trick.length === 0) {
-    const role = seat === s.picker ? 'picker' : seat === s.partner ? 'partner' : 'defender';
     const { grades } = gradeLeads(legal, role, s.calledSuit);
     const ranked = [...legal].sort((a, b) => TIERS.indexOf(grades[a][0]) - TIERS.indexOf(grades[b][0]) ||
       (isTrump(a) && isTrump(b) ? trumpPower(a) - trumpPower(b) : points(a) - points(b)));
-    return ranked[0];
+    const card = ranked[0];
+    // Expert refinement: with the boss trump in hand, lead it — a certain
+    // trick that pulls two enemy trump.
+    if (level === 'expert' && (role === 'picker' || role === 'partner')) {
+      const boss = bossOut(s, hand);
+      const myBest = trumps(legal).sort((a, b) => trumpPower(a) - trumpPower(b))[0];
+      if (myBest && (!boss || trumpPower(myBest) < trumpPower(boss))) {
+        return { card: myBest, why: `Your ${myBest} is the boss trump right now: a certain trick that pulls two enemy trump.` };
+      }
+    }
+    return { card, why: grades[card][1] };
   }
 
   const winIdx = trickWinner(s.trick);
   const winnerSeat = s.trickSeats[winIdx];
   const winCard = s.trick[winIdx];
-  const mates = sideOf(s, winnerSeat) === me;
+  const side = knownSide(s, seat, winnerSeat, level);
   const last = s.trick.length === 4;
   const winners = legal.filter(c => beats(winCard, c));
   const cheapestWin = winners.sort((a, b) => {
     const at = isTrump(a), bt = isTrump(b);
-    if (at !== bt) return at ? 1 : -1; // win with fail rank before spending trump
+    if (at !== bt) return at ? 1 : -1;
     return at ? trumpPower(b) - trumpPower(a) : points(a) - points(b);
   })[0];
   const trickPts = handPoints(s.trick);
 
-  // Teammate holds it and it is safe (or we are last): schmear.
-  const safe = mates && (last || (isTrump(winCard) && trumpPower(winCard) <= 5));
-  if (safe) return [...legal].sort((a, b) => points(b) - points(a) || trumpPower(b) - trumpPower(a))[0];
-  if (mates && !winners.length) return dump(legal);
-  if (winners.length && (last ? trickPts + points(cheapestWin) >= 4 : trickPts >= 10 || me === 'P' || !mates)) {
-    return cheapestWin;
-  }
-  return dump(legal);
-}
+  // Is the current winning card safe from the players still to come?
+  const winCardIsBoss = (() => {
+    if (!isTrump(winCard)) return false;
+    if (level !== 'expert') return trumpPower(winCard) <= 5;
+    const boss = bossOut(s, hand);
+    return !boss || trumpPower(winCard) <= trumpPower(boss);
+  })();
 
-// Lowest points first; among zero-pointers throw from short suits, keep trump.
-function dump(cards) {
-  return [...cards].sort((a, b) =>
-    points(a) - points(b) ||
-    (isTrump(a) ? 1 : 0) - (isTrump(b) ? 1 : 0) ||
-    trumpPower(b) - trumpPower(a))[0];
+  // Schmear: a mate holds it and it will stick — or, as a defender in the
+  // dark, the book's 60% rule toward a non-picker winner we cannot beat.
+  const inTheDark = side === 'unknown' && role === 'defender' && winnerSeat !== s.picker && !winners.length;
+  if ((side === 'mate' || inTheDark) && (last || winCardIsBoss)) {
+    const fat = [...legal].sort((a, b) => points(b) - points(a) || trumpPower(b) - trumpPower(a))[0];
+    if (points(fat) > 0) {
+      return {
+        card: fat,
+        why: side === 'mate'
+          ? `${last ? 'Last to play and your' : 'Your'} side has the trick locked: schmear the fat, every point counts toward the 61.`
+          : 'The picker cannot win this trick. When in doubt, schmear: right about 60% of the time.',
+      };
+    }
+    return { card: lowRank(legal), why: 'Trick is won but you hold no points to feed it: throw your smallest.' };
+  }
+  if (side === 'mate' && !winners.length) {
+    return { card: lowRank(legal), why: 'Teammate is winning but the trick is not safe yet: keep your points, throw low.' };
+  }
+  if (winners.length && (last ? trickPts + points(cheapestWin) >= 4 : trickPts >= 10 || role === 'picker' || side === 'enemy')) {
+    return {
+      card: cheapestWin,
+      why: isTrump(cheapestWin)
+        ? `Take it with your cheapest winning trump: ${trickPts} points sit on the table and the queens stay home.`
+        : 'Your card wins the trick without spending trump: points before power.',
+    };
+  }
+  return {
+    card: lowRank(legal),
+    why: winners.length
+      ? 'You could win, but the trick is thin: save your trump for a fatter one.'
+      : 'You cannot win this trick: throw your lowest points and wait.',
+  };
 }
 
 export { sortHand, currentTurn };

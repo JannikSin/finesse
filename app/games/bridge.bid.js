@@ -122,7 +122,32 @@ function partnerLastBid(a, seat) {
 }
 const myBids = (a, seat) => a.calls.filter((c, i) => (a.dealer + i) % 4 === seat && isBid(c));
 
-export function botCall(a, seat) {
+// Novice bidder: natural bids, no conventions, chronic optimism.
+function noviceCall(a, seat) {
+  const hand = a.hands[seat];
+  const legal = legalCalls(a);
+  const p = hcp(hand);
+  const lg = longest(hand);
+  const lastBid = [...a.calls].reverse().find(isBid);
+  const partner = partnerLastBid(a, seat);
+  if (partner && isBid(partner.call) && partner.call[1] !== 'N') {
+    const su = partner.call[1];
+    if (len(hand, su) >= 2 && p >= 5) {
+      const raise = `${Number(partner.call[0]) + 1}${su}`;
+      if (legal.includes(raise)) return raise;
+    }
+  }
+  if (p >= 11) {
+    for (let lvlN = 1; lvlN <= 3; lvlN++) {
+      const b = `${lvlN}${lg}`;
+      if (legal.includes(b)) return b;
+    }
+  }
+  return 'P';
+}
+
+export function botCall(a, seat, level = 'solid') {
+  if (level === 'novice') return noviceCall(a, seat);
   const hand = a.hands[seat];
   const legal = legalCalls(a);
   const lastBid = [...a.calls].reverse().find(isBid);
@@ -209,14 +234,52 @@ export function gradeLeads(hand, contract) {
   return { grades: g, bestTier };
 }
 
+// Advice for the human's call: the solid bot's choice plus the system reason.
+export function adviseCall(a, seat) {
+  const call = botCall(a, seat, 'solid');
+  const hand = a.hands[seat];
+  const lastBid = [...a.calls].reverse().find(isBid);
+  const partner = partnerLastBid(a, seat);
+  const iBid = myBids(a, seat).length > 0;
+  if (!lastBid) {
+    const o = openingBid(hand);
+    return { call, why: o.call === call ? o.why : 'System pass: nothing to say yet.' };
+  }
+  if (partner && isBid(partner.call) && !iBid) {
+    const r = responseTo(partner.call, hand);
+    if (r.call === call) return { call, why: r.why };
+  }
+  if (partner && iBid) {
+    const mine = myBids(a, seat);
+    const my = mine[mine.length - 1];
+    if (my === '1N' && partner.call === '2C') return { call, why: staymanReply(hand).why };
+    if (my === '1N' && (partner.call === '2D' || partner.call === '2H')) return { call, why: transferReply(partner.call).why };
+    if (partner.call === '4N') return { call, why: blackwoodReply(hand).why };
+  }
+  return {
+    call,
+    why: call === 'P'
+      ? 'Nothing systemic fits: pass. Discipline is a bid too.'
+      : `${hcp(hand)} HCP: ${callLabel(call)} is the system continuation.`,
+  };
+}
+
 // ---- bot card play ---------------------------------------------------------
-export function botPlay(a, seat) {
+export function botPlay(a, seat, level = 'solid') {
+  return adviseMove(a, seat, level).card;
+}
+
+export function adviseMove(a, seat, level = 'expert') {
   const legal = (a.trick.length === 0 ? [...a.hands[seat]] : (() => {
     const led = a.trick[0][1];
     const f = a.hands[seat].filter(c => c[1] === led);
     return f.length ? f : [...a.hands[seat]];
   })());
-  if (legal.length === 1) return legal[0];
+  if (legal.length === 1) return { card: legal[0], why: 'Forced: your only legal card.' };
+  if (level === 'novice') {
+    const c = [...legal].sort((x, y) => rankIdx(y) - rankIdx(x))[0];
+    return { card: c, why: 'Novice habit: biggest card first, plan later.' };
+  }
   const trump = a.contract.strain === 'N' ? null : a.contract.strain;
   const high = cards => [...cards].sort((x, y) => rankIdx(y) - rankIdx(x))[0];
   const low = cards => [...cards].sort((x, y) => rankIdx(x) - rankIdx(y))[0];
@@ -225,13 +288,14 @@ export function botPlay(a, seat) {
     const declSide = seat % 2 === a.contract.declarer % 2;
     if (declSide && trump) {
       const tr = legal.filter(c => c[1] === trump);
-      if (tr.length && a.trickNo < 3) return high(tr); // draw trumps early
+      if (tr.length && a.trickNo < 3) {
+        return { card: high(tr), why: 'Declaring side in a suit contract: draw trumps early so your winners live.' };
+      }
     }
-    const winners = legal.filter(c => c[0] === 'A');
-    if (winners.length) return winners[0];
-    return low(legal);
+    const aces = legal.filter(c => c[0] === 'A');
+    if (aces.length) return { card: aces[0], why: 'Cash a sure winner while you hold the lead.' };
+    return { card: low(legal), why: 'Nothing certain to cash: exit low and keep your honors guarded.' };
   }
-  const led = a.trick[0][1];
   const winIdx = a.trick.reduce((w, c, i) => {
     const better = (trump && c[1] === trump && a.trick[w][1] !== trump) ||
       (c[1] === a.trick[w][1] && rankIdx(c) > rankIdx(a.trick[w]));
@@ -243,7 +307,13 @@ export function botPlay(a, seat) {
     (c[1] === winCard[1] && rankIdx(c) > rankIdx(winCard));
   const winners = legal.filter(beatsWin);
   const last = a.trick.length === 3;
-  if (mate && (last || rankIdx(winCard) >= rankIdx('Q' + winCard[1]))) return low(legal);
-  if (winners.length) return low(winners.filter(c => !trump || c[1] !== trump)[0] ? winners.filter(c => c[1] !== trump) : winners) ?? low(winners);
-  return low(legal);
+  if (mate && (last || rankIdx(winCard) >= rankIdx('Q' + winCard[1]))) {
+    return { card: low(legal), why: 'Partner already has the trick: signal low and spend nothing.' };
+  }
+  if (winners.length) {
+    const nonTrumpWinners = winners.filter(c => !trump || c[1] !== trump);
+    const card = nonTrumpWinners.length ? low(nonTrumpWinners) : low(winners);
+    return { card, why: 'Third hand high — but no higher than the trick needs.' };
+  }
+  return { card: low(legal), why: 'Cannot beat it: second hand low, save the honors for later.' };
 }

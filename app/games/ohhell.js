@@ -1,11 +1,15 @@
 // Oh hell trainer module: bid drill (with the dealer hook), table vs bots, study.
 import { html } from 'htm/preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
-import { Card, Hand, SuitChip, GLYPH, rankLabel, frenchView } from '../cards.js';
+import {
+  Card, Hand, SuitChip, GLYPH, rankLabel, frenchView,
+  getLevelPref, setLevelPref, getCoachPref, setCoachPref, levelForSeat,
+  TableControls, CoachNote,
+} from '../cards.js';
 import {
   newRound, forbiddenBid, submitBid, legalMoves, currentTurn, playCard, SEQ,
 } from './ohhell.engine.js';
-import { estimateTricks, botBid, botPlay } from './ohhell.coach.js';
+import { estimateTricks, botBid, botPlay, adviseMove } from './ohhell.coach.js';
 
 const viewFor = trump => c => frenchView(c, x => x[1] === trump);
 
@@ -49,11 +53,17 @@ const NAMES = ['You', 'Fly', 'Moss', 'Bella'];
 function Table({ onResult }) {
   const [, redraw] = useState(0);
   const ref = useRef(null);
-  if (!ref.current) ref.current = { s: newRound(0, 3), roundNo: 0, dealer: 3, totals: [0, 0, 0, 0], showTrick: null };
+  if (!ref.current) {
+    ref.current = {
+      s: newRound(0, 3), roundNo: 0, dealer: 3, totals: [0, 0, 0, 0], showTrick: null,
+      pref: getLevelPref(), coach: getCoachPref(), seed: 0,
+    };
+  }
   const g = ref.current;
   const s = g.s;
   const bump = () => redraw(n => n + 1);
   const toView = viewFor(s.trump);
+  const lvl = seat => levelForSeat(g.pref, seat, g.seed);
 
   function afterPlay() {
     if (s.lastTrick && s.trick.length === 0) { g.showTrick = s.lastTrick; s.lastTrick = null; }
@@ -67,9 +77,9 @@ function Table({ onResult }) {
   useEffect(() => {
     const t = setTimeout(() => {
       if (g.showTrick) { g.showTrick = null; bump(); return; }
-      if (s.phase === 'bid' && s.turn !== 0) { submitBid(s, s.turn, botBid(s, s.turn)); bump(); }
+      if (s.phase === 'bid' && s.turn !== 0) { submitBid(s, s.turn, botBid(s, s.turn, lvl(s.turn))); bump(); }
       else if (s.phase === 'play' && currentTurn(s) !== 0) {
-        playCard(s, currentTurn(s), botPlay(s, currentTurn(s))); afterPlay(); bump();
+        playCard(s, currentTurn(s), botPlay(s, currentTurn(s), lvl(currentTurn(s)))); afterPlay(); bump();
       }
     }, g.showTrick ? 1100 : 400);
     return () => clearTimeout(t);
@@ -115,6 +125,17 @@ function Table({ onResult }) {
         onClick=${() => { submitBid(s, 0, i); bump(); }}>${i}</button>`)}
     </div>`}
 
+    ${myBid && g.coach && (() => {
+      const est = estimateTricks(s.hands[0], s.trump);
+      return html`<${CoachNote} text=${`Count says ${Math.min(est.bid, s.n)} (raw ${est.est.toFixed(1)}). ${est.reasons[0] || 'No sure winners: zero is a fine bid.'}`} />`;
+    })()}
+    ${myPlay && g.coach && (() => {
+      const adv = adviseMove(s, 0, 'expert');
+      return html`<${CoachNote} text=${`${rankLabel(adv.card[0])}${GLYPH[adv.card[1]]}: ${adv.why}`} />`;
+    })()}
+    <${TableControls} pref=${g.pref} coach=${g.coach}
+      onLevel=${l => { g.pref = l; setLevelPref(l); g.seed = (g.seed + 1) % 3; bump(); }}
+      onCoach=${on => { g.coach = on; setCoachPref(on); bump(); }} />
     <div class="me ${myPlay || myBid ? 'turn' : ''}">
       <span>You${s.bids[0] !== null ? ` · ${s.tricks[0]}/${s.bids[0]}` : ''}</span>
       <span class="score">${g.totals[0]}</span>

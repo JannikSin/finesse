@@ -1,12 +1,16 @@
 // Hearts trainer module: pass-three drill, table vs bots, study.
 import { html } from 'htm/preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
-import { Card, Hand, GLYPH, rankLabel, frenchView } from '../cards.js';
+import {
+  Card, Hand, GLYPH, rankLabel, frenchView,
+  getLevelPref, setLevelPref, getCoachPref, setCoachPref, levelForSeat,
+  TableControls, CoachNote,
+} from '../cards.js';
 import {
   deal, newHand, submitPass, startPlay, legalMoves, currentTurn, playCard,
   PASS_CYCLE, isPoint,
 } from './hearts.engine.js';
-import { passValue, bestPass, botPass, botPlay } from './hearts.coach.js';
+import { passValue, bestPass, botPass, botPlay, adviseMove } from './hearts.coach.js';
 
 const toView = c => frenchView(c, x => x === 'QS');
 const cardLabel = c => `${rankLabel(c[0])}${GLYPH[c[1]]}`;
@@ -42,14 +46,21 @@ const NAMES = ['You', 'Fly', 'Moss', 'Bella'];
 function Table({ onResult }) {
   const [, redraw] = useState(0);
   const ref = useRef(null);
-  if (!ref.current) ref.current = { s: prep(newHand(0)), handNo: 0, scores: [0, 0, 0, 0], passSel: [], showTrick: null };
+  if (!ref.current) {
+    ref.current = {
+      handNo: 0, scores: [0, 0, 0, 0], passSel: [], showTrick: null,
+      pref: getLevelPref(), coach: getCoachPref(), seed: 0,
+    };
+    ref.current.s = prep(newHand(0), ref.current);
+  }
   const g = ref.current;
   const s = g.s;
   const bump = () => redraw(n => n + 1);
+  const lvl = seat => levelForSeat(g.pref, seat, g.seed);
 
-  function prep(hand) {
+  function prep(hand, gg) {
     // Bots pass immediately; hold hands go straight to play.
-    if (hand.phase === 'pass') for (const seat of [1, 2, 3]) submitPass(hand, seat, botPass(hand.hands[seat]));
+    if (hand.phase === 'pass') for (const seat of [1, 2, 3]) submitPass(hand, seat, botPass(hand.hands[seat], levelForSeat(gg.pref, seat, gg.seed)));
     if (hand.phase === 'play') startPlay(hand);
     return hand;
   }
@@ -67,7 +78,7 @@ function Table({ onResult }) {
     const t = setTimeout(() => {
       if (g.showTrick) { g.showTrick = null; bump(); return; }
       if (s.phase === 'play' && currentTurn(s) !== 0) {
-        playCard(s, currentTurn(s), botPlay(s, currentTurn(s)));
+        playCard(s, currentTurn(s), botPlay(s, currentTurn(s), lvl(currentTurn(s))));
         afterPlay(); bump();
       }
     }, g.showTrick ? 1100 : 400);
@@ -100,7 +111,7 @@ function Table({ onResult }) {
       <span class="call">Totals: ${g.scores.map((sc, i) => `${NAMES[i]} ${sc}`).join(' · ')}${over ? ` · GAME: ${NAMES[g.scores.indexOf(Math.min(...g.scores))]} wins` : ''}</span>
       <button class="big" onClick=${() => {
         if (over) { g.scores = [0, 0, 0, 0]; g.handNo = 0; } else g.handNo++;
-        g.s = prep(newHand(g.handNo)); g.passSel = []; bump();
+        g.s = prep(newHand(g.handNo), g); g.passSel = []; bump();
       }}>${over ? 'New game' : 'Next hand'}</button>
     </div>`}
 
@@ -110,6 +121,17 @@ function Table({ onResult }) {
       }}>Pass them</button>`}
     </div>`}
 
+    ${myPass && g.coach && (() => {
+      const best = bestPass(s.hands[0]);
+      return html`<${CoachNote} text=${`Book pass: ${best.map(c => rankLabel(c[0]) + GLYPH[c[1]]).join(', ')} — ${passValue(s.hands[0], best[0])[1]}`} />`;
+    })()}
+    ${myPlay && g.coach && (() => {
+      const adv = adviseMove(s, 0, 'expert');
+      return html`<${CoachNote} text=${`${rankLabel(adv.card[0])}${GLYPH[adv.card[1]]}: ${adv.why}`} />`;
+    })()}
+    <${TableControls} pref=${g.pref} coach=${g.coach}
+      onLevel=${l => { g.pref = l; setLevelPref(l); g.seed = (g.seed + 1) % 3; bump(); }}
+      onCoach=${on => { g.coach = on; setCoachPref(on); bump(); }} />
     <div class="me ${myPlay || myPass ? 'turn' : ''}">
       <span>You</span><span class="score">${g.scores[0]}</span>
       <span class="score">trick ${Math.min(s.trickNo + 1, 13)}/13</span>

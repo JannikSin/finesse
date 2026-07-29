@@ -1,13 +1,18 @@
 // Euchre trainer module: call drill (both rounds), lead drill, table vs bots, study.
 import { html } from 'htm/preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
-import { Card, Hand, SuitChip, GLYPH, rankLabel } from '../cards.js';
+import {
+  Card, Hand, SuitChip, GLYPH, rankLabel,
+  getLevelPref, setLevelPref, getCoachPref, setCoachPref, levelForSeat,
+  TableControls, CoachNote,
+} from '../cards.js';
 import {
   deal, newHand, callRound1, callRound2, discard, legalMoves, currentTurn,
   playCard, isTrump, teamOf, SUITS, sortHand,
 } from './euchre.engine.js';
 import {
   evalCall1, evalCall2, gradeLeads, discardChoice, botCall1, botCall2, botPlay,
+  adviseMove,
 } from './euchre.coach.js';
 
 const viewFor = t => c => ({
@@ -91,11 +96,17 @@ const NAMES = ['You', 'Fly', 'Moss', 'Bella']; // Moss is your partner across
 function Table({ onResult }) {
   const [, redraw] = useState(0);
   const ref = useRef(null);
-  if (!ref.current) ref.current = { s: newHand(3), scores: [0, 0], showTrick: null, note: '' };
+  if (!ref.current) {
+    ref.current = {
+      s: newHand(3), scores: [0, 0], showTrick: null, note: '',
+      pref: getLevelPref(), coach: getCoachPref(), seed: 0,
+    };
+  }
   const g = ref.current;
   const s = g.s;
   const bump = () => redraw(n => n + 1);
   const toView = viewFor(s.trump);
+  const lvl = seat => levelForSeat(g.pref, seat, g.seed);
 
   function afterPlay() {
     if (s.lastTrick && s.trick.length === 0) {
@@ -113,13 +124,13 @@ function Table({ onResult }) {
   useEffect(() => {
     const t = setTimeout(() => {
       if (g.showTrick) { g.showTrick = null; bump(); return; }
-      if (s.phase === 'call1' && s.turn !== 0) { callRound1(s, s.turn, botCall1(s, s.turn)); bump(); }
-      else if (s.phase === 'call2' && s.turn !== 0) { callRound2(s, s.turn, botCall2(s, s.turn)); bump(); }
+      if (s.phase === 'call1' && s.turn !== 0) { callRound1(s, s.turn, botCall1(s, s.turn, lvl(s.turn))); bump(); }
+      else if (s.phase === 'call2' && s.turn !== 0) { callRound2(s, s.turn, botCall2(s, s.turn, lvl(s.turn))); bump(); }
       else if (s.phase === 'discard' && s.dealer !== 0) { discard(s, discardChoice(s.hands[s.dealer], s.trump)); bump(); }
       else if (s.phase === 'play' && currentTurn(s) !== 0 && s.sitout !== currentTurn(s)) {
-        playCard(s, currentTurn(s), botPlay(s, currentTurn(s))); afterPlay(); bump();
+        playCard(s, currentTurn(s), botPlay(s, currentTurn(s), lvl(currentTurn(s)))); afterPlay(); bump();
       } else if (s.phase === 'play' && s.sitout === 0) {
-        playCard(s, currentTurn(s), botPlay(s, currentTurn(s))); afterPlay(); bump();
+        playCard(s, currentTurn(s), botPlay(s, currentTurn(s), lvl(currentTurn(s)))); afterPlay(); bump();
       }
     }, g.showTrick ? 1200 : 450);
     return () => clearTimeout(t);
@@ -174,6 +185,21 @@ function Table({ onResult }) {
     ${myDiscard && html`<p class="scene">You picked it up: tap a card to discard.</p>`}
     ${s.sitout === 0 && s.phase === 'play' && html`<p class="scene">${NAMES[s.maker]} is alone: you sit this one out.</p>`}
 
+    ${myCall1 && g.coach && (() => {
+      const v = evalCall1(s.hands[0], 0, s.dealer, s.upcard);
+      return html`<${CoachNote} text=${`Book: ${v.action === 'pass' ? 'PASS' : v.action.toUpperCase()}. ${v.reasons[v.reasons.length - 1]}`} />`;
+    })()}
+    ${myCall2 && g.coach && (() => {
+      const v = evalCall2(s.hands[0], 0, s.dealer, s.upcard);
+      return html`<${CoachNote} text=${`Book: ${v.action === 'pass' ? 'PASS' : 'call ' + GLYPH[v.action]}. ${v.reasons[v.reasons.length - 1]}`} />`;
+    })()}
+    ${myPlay && g.coach && (() => {
+      const adv = adviseMove(s, 0, 'expert');
+      return html`<${CoachNote} text=${`${rankLabel(adv.card[0])}${GLYPH[adv.card[1]]}: ${adv.why}`} />`;
+    })()}
+    <${TableControls} pref=${g.pref} coach=${g.coach}
+      onLevel=${l => { g.pref = l; setLevelPref(l); g.seed = (g.seed + 1) % 3; bump(); }}
+      onCoach=${on => { g.coach = on; setCoachPref(on); bump(); }} />
     <div class="me ${myPlay || myCall1 || myCall2 || myDiscard ? 'turn' : ''}">
       <span>You ${makerBadge(0) || ''} · Moss is your partner</span>
       <span class="score">trick ${Math.min(s.trickNo + 1, 5)}/5</span>

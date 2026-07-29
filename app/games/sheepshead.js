@@ -1,12 +1,19 @@
 // Sheepshead trainer module: pick drill, lead drill, table vs bots, study.
 import { html } from 'htm/preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
-import { Card, Hand, SuitChip, GLYPH, rankLabel, frenchView } from '../cards.js';
+import {
+  Card, Hand, SuitChip, GLYPH, rankLabel, frenchView,
+  getLevelPref, setLevelPref, getCoachPref, setCoachPref, levelForSeat,
+  TableControls, CoachNote,
+} from '../cards.js';
 import {
   deal, newHand, pass, pick, buryAndCall, callableSuits, legalMoves, currentTurn,
   playCard, isTrump, sortHand, FAIL_SUITS,
 } from './sheepshead.engine.js';
-import { evalPick, suggestBury, gradeLeads, botPickDecision, botPlay } from './sheepshead.coach.js';
+import {
+  evalPick, suggestBury, gradeLeads, botPickDecision, botPlay, botBuryChoice,
+  adviseMove,
+} from './sheepshead.coach.js';
 import { STUDY } from './sheepshead.study.js';
 
 const toView = c => frenchView(c, isTrump);
@@ -91,26 +98,30 @@ function Table({ onResult }) {
   const [, redraw] = useState(0);
   const ref = useRef(null);
   if (!ref.current) {
-    ref.current = { s: newHand(4), scores: [0, 0, 0, 0, 0], lastTrick: null, buriedSel: [], note: '' };
+    ref.current = {
+      s: newHand(4), scores: [0, 0, 0, 0, 0], lastTrick: null, buriedSel: [], note: '',
+      pref: getLevelPref(), coach: getCoachPref(), seed: 0,
+    };
   }
   const g = ref.current;
   const s = g.s;
   const bump = () => redraw(n => n + 1);
+  const lvl = seat => levelForSeat(g.pref, seat, g.seed);
 
   useEffect(() => {
     const t = setTimeout(() => {
       if (g.lastTrick) { g.lastTrick = null; bump(); return; }
       if (s.phase === 'pick' && s.turn !== 0) {
-        if (botPickDecision(s, s.turn)) pick(s, s.turn); else pass(s);
+        if (botPickDecision(s, s.turn, lvl(s.turn))) pick(s, s.turn); else pass(s);
         bump();
       } else if (s.phase === 'alldown') {
         g.note = 'Everyone passed: re-deal.'; // ponytail: leaster mode, add when the table wants it
         g.s = newHand((s.dealer + 1) % 5); bump();
       } else if (s.phase === 'bury' && s.picker !== 0) {
-        const sb = suggestBury(s.hands[s.picker]);
+        const sb = botBuryChoice(s, lvl(s.picker));
         buryAndCall(s, sb.bury, sb.calledSuit); bump();
       } else if (s.phase === 'play' && currentTurn(s) !== 0) {
-        stepPlay(botPlay(s, currentTurn(s)), currentTurn(s)); bump();
+        stepPlay(botPlay(s, currentTurn(s), lvl(currentTurn(s))), currentTurn(s)); bump();
       }
     }, g.lastTrick ? 1300 : s.phase === 'play' ? 500 : 350);
     return () => clearTimeout(t);
@@ -168,15 +179,28 @@ function Table({ onResult }) {
     ${myTurnPick && html`<div class="btnrow">
       <button class="big" onClick=${() => { pick(s, 0); bump(); }}>Pick</button>
       <button class="big alt" onClick=${() => { pass(s); bump(); }}>Pass</button>
-      <button class="hint" onClick=${() => { g.note = 'Coach: ' + evalPick(human, (5 - (s.dealer + 1) % 5) % 5).verdict.toUpperCase(); bump(); }}>Coach?</button>
     </div>`}
-    ${myTurnPick && g.note.startsWith('Coach') && html`<p class="callinfo">${g.note}</p>`}
+    ${myTurnPick && g.coach && (() => {
+      const ev = evalPick(human, (5 - (s.dealer + 1) % 5) % 5);
+      return html`<${CoachNote} text=${`Book says ${ev.verdict === 'either' ? 'either way' : ev.verdict.toUpperCase()}: ${ev.reasons[ev.reasons.length - 1]}`} />`;
+    })()}
 
     ${myBury && html`<p class="scene">Tap two cards to bury${g.buriedSel.length === 2 ? ', then call a suit' : ''}.
       ${callOpts.map(su => html`<button class="hint" onClick=${() => { buryAndCall(s, g.buriedSel, su); g.buriedSel = []; bump(); }}>Call ${GLYPH[su]}</button>`)}
       ${g.buriedSel.length === 2 && !callOpts.length && html`<button class="hint" onClick=${() => { buryAndCall(s, g.buriedSel, null); g.buriedSel = []; bump(); }}>Go alone</button>`}
     </p>`}
+    ${myBury && g.coach && (() => {
+      const sb = suggestBury(s.hands[0]);
+      return html`<${CoachNote} text=${sb.reasons.join(' ')} />`;
+    })()}
+    ${myPlay && g.coach && (() => {
+      const adv = adviseMove(s, 0, 'expert');
+      return html`<${CoachNote} text=${`${rankLabel(adv.card[0])}${GLYPH[adv.card[1]]}: ${adv.why}`} />`;
+    })()}
 
+    <${TableControls} pref=${g.pref} coach=${g.coach}
+      onLevel=${l => { g.pref = l; setLevelPref(l); g.seed = (g.seed + 1) % 3; bump(); }}
+      onCoach=${on => { g.coach = on; setCoachPref(on); bump(); }} />
     <div class="me ${myPlay || myTurnPick || myBury ? 'turn' : ''}">
       <span>You ${roleBadge(0) || ''}</span><span class="score">${g.scores[0]}</span>
       <span class="score">trick ${Math.min(s.trickNo + 1, 6)}/6</span>

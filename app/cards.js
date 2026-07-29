@@ -30,3 +30,27 @@ export const Hand = ({ cards, toView, onPlay, legal, selected }) => html`<div cl
 </div>`;
 
 export const SuitChip = su => html`<span class="chip suit-${su}">${GLYPH[su]} ${SUIT_NAME[su]}</span>`;
+
+// ---- table preferences: bot difficulty + coach mode ------------------------
+export const BOT_LEVELS = ['novice', 'solid', 'expert', 'mixed'];
+export const getLevelPref = () => {
+  const l = localStorage.getItem('finesse.level');
+  return BOT_LEVELS.includes(l) ? l : 'solid';
+};
+export const setLevelPref = l => localStorage.setItem('finesse.level', l);
+export const getCoachPref = () => localStorage.getItem('finesse.coach') !== 'off';
+export const setCoachPref = on => localStorage.setItem('finesse.coach', on ? 'on' : 'off');
+
+// 'mixed' seats a table of different players; assignment fixed per session seed.
+export const levelForSeat = (pref, seat, seed = 0) =>
+  pref === 'mixed' ? ['novice', 'solid', 'expert'][(seat * 7 + seed) % 3] : pref;
+
+export function TableControls({ pref, coach, onLevel, onCoach }) {
+  return html`<div class="btnrow wrap controls">
+    <span class="scene">Bots:</span>
+    ${BOT_LEVELS.map(l => html`<button class="hint ${pref === l ? 'on' : ''}" onClick=${() => onLevel(l)}>${l}</button>`)}
+    <button class="hint ${coach ? 'on' : ''}" onClick=${() => onCoach(!coach)}>coach ${coach ? 'on' : 'off'}</button>
+  </div>`;
+}
+
+export const CoachNote = ({ text }) => (text ? html`<p class="coachnote">💡 ${text}</p>` : '');

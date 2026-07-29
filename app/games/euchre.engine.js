@@ -66,6 +66,7 @@ export function newHand(dealer, rng = Math.random) {
     trump: null, maker: null, alone: false, sitout: null,
     leader: (dealer + 1) % 4, trick: [], trickSeats: [], trickNo: 0,
     tricksWon: [0, 0], // by team
+    history: [], // completed tricks: public info for card-counting bots
   };
 }
 
@@ -153,6 +154,7 @@ export function playCard(s, seat, card) {
     const w = s.trickSeats[trickWinner(s.trick, s.trump)];
     s.tricksWon[teamOf(w)]++;
     s.lastTrick = { cards: [...s.trick], seats: [...s.trickSeats], winner: w };
+    s.history.push(s.lastTrick);
     s.trick = [];
     s.trickSeats = [];
     s.leader = w;
