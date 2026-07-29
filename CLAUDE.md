@@ -1,39 +1,63 @@
-# Sheepdog — sheepshead trainer PWA
+# Finesse — card game trainer PWA (formerly Sheepdog)
 
 Static PWA, no build step, vanilla Preact + htm vendored (copied from tally; same
-CSP-hash import map). Teaches the game; tally scores it. Deployed to GitHub Pages
-(public repo).
+CSP-hash import map). Teaches games; tally scores them. The two stay SEPARATE apps
+by council verdict (2026-07-29): one cross-link each way at most, no shared runtime
+code. Bridge was council-excluded but David vetoed: it is IN, as the app's most
+significant training track.
 
 ## What it is
-Three training modes plus a reference:
-- `#pick` — Pick or Pass: random 6-card hand + seat position, grade against the book.
-- `#lead` — Find the Lead: role (picker/partner/defender) + called suit, grade the opening lead.
-- `#table` — At the Table: full 5-handed hands vs 4 bots (Moss, Fly, Rex, Bella).
-- `#study` — rules + strategy distilled from pagat.com, sheepshead.org, playsheepshead.org, sheepsheadrules.com (Wergin-school picking guidelines).
+Six games, each with decision drills, leveled study (Level 1 rules → Level 3
+advanced strategy), and full play vs bots where built:
+- sheepshead — pick drill, lead drill, table, study
+- euchre — call drill (rounds 1+2, next convention), lead drill, table, study
+- hearts — pass-three drill, table, study
+- ohhell — bid drill (dealer hook), table, study; scoring matches tally's exact10
+- rook — bid drill, study (Kentucky Discard, 120 deck like tally); table unbuilt
+- bridge — opening-bid, response, convention (Stayman/transfer/Blackwood), and
+  lead drills; full-auction table with dummy play; SAYC per the ACBL booklet
+Routes: `#<game>` menu, `#<game>/<drillId>`, `#<game>/table`, `#<game>/study`.
+Study content is research-fed: 2+ named strategy sources per game, cited in the
+header comment of each study section / game file.
 
 ## Hard rules (public repo)
 - No real names anywhere in repo.
-- Zero `innerHTML` / `eval` / `new Function`. CSP pinned; import map is byte-identical
-  to tally's so the sha256 hash is the same. Never resolve CSP with `unsafe-inline`.
+- Zero `innerHTML` / `eval`. CSP pinned; import map byte-identical to tally's.
 - Zero runtime network calls beyond same-origin.
-- `vendor/` upgrade ritual: file + `vendor/VERSIONS.md` + `CACHE` bump in `sw.js`, all or none.
+- **sw.js activate cleanup must stay prefixed `finesse-`**: all of David's PWAs
+  share the janniksin.github.io origin, and an unprefixed cleanup evicts tally,
+  bonmot and grandstand caches. Never remove that filter.
+- `vendor/` upgrade ritual: file + `vendor/VERSIONS.md` + `CACHE` bump, all or none.
 
 ## Architecture
-- `app/engine.js` — pure rules: deck, trump order, trick winner, hand state machine
-  (pick → bury/call → play → done), called-ace constraints, scoring ladder. ZERO imports.
-- `app/coach.js` — strategy: `evalPick`, `suggestBury`, `gradeLeads`, `botPickDecision`,
-  `botPlay`. Imports engine only.
-- `app/study.js` — reference content, plain data.
-- `app/main.js` — all UI (shell, 4 screens, localStorage stats at `sheepdog.v1`).
-- `tests/engine.test.mjs` — rules, called-ace edge cases, scoring, coach contracts,
-  purity check.
+- `app/main.js` — shell: home grid, game menu, generic Drill + Study screens,
+  stats at `finesse.v1` (per game per drill; migrates sheepdog.v2/v1).
+- `app/cards.js` — shared Card/Hand widgets; games provide `toView(card)`.
+- `app/games/<game>.js` — the module: `export const game = { id, name, glyph,
+  tagline, toView, study, drills, Table }`. Drills: `{ id, title, hint,
+  kind: 'choice'|'card'|'cards', count?, scene(), grade(scene, answer) }`.
+- `app/games/<game>.engine.js` — pure rules, ZERO imports (rook: `rook.logic.js`).
+- `app/games/<game>.coach.js` — heuristics + bot policy, imports engine only
+  (bridge: `bridge.bid.js` holds the SAYC brain).
+  Engines/coaches must never import htm/preact (node tests load them directly).
+- `tests/` — engine.test.mjs (sheepshead), games.test.mjs, bridge.test.mjs: `npm test`.
+
+## Adding a game
+1. `<game>.engine.js` (pure) + `<game>.coach.js` (pure) + `<game>.js` (module).
+2. Register in `app/main.js` GAMES array.
+3. Add ALL new files to `sw.js` PRECACHE and bump `CACHE`.
+4. Tests: full bot-vs-bot playout loop + rule edge cases + scoring.
+5. Study: leveled, from 2+ named strategy sources.
 
 ## Known ceilings (ponytail comments in code)
-- All-pass re-deals instead of playing a leaster.
-- Bots read true team membership pre-ace-flip (no inference model).
-- Jack-of-diamonds partner variant, 3/4-handed, cracking: not built.
+- Sheepshead: all-pass re-deals (no leaster); bots know true teams pre-ace-flip.
+- Rook: no table (auction + kitty + discard loop unbuilt).
+- Bridge: no doubles/redoubles, non-vulnerable scoring only, one-round rebid
+  depth in bot auctions, no negative/takeout doubles. Growth path: doubles →
+  vulnerability rotation → deeper rebids → 2/1 as a system toggle.
+- Wergin book (archive.org, borrow-only) pending David's login.
 
 ## Verify
-- `node --test tests/engine.test.mjs`
+- `npm test` (37 tests)
 - `npx serve` at repo root; hard-refresh twice for sw.js.
 - Icons: `node tools/make-icons.mjs`.

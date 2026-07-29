@@ -121,42 +121,60 @@ function Table({ onResult }) {
 }
 
 // ---- study -----------------------------------------------------------------
+// Sources: pagat.com, Mark's Hearts Tips (advanced), Joe Andrews hearts
+// columns, Wikibooks hearts strategy, Solitaired/RarePike guides.
 const STUDY = [
   {
-    title: 'The game',
+    title: 'Level 1 · The game',
     body: [
       'Full 52-card deck, four players, no partners. Lowest score wins when someone crosses 100.',
-      'Every heart taken costs 1 point. The queen of spades costs 13. There are 26 points in every hand, and you want none of them.',
-      'The 2♣ holder leads it to start. No points may be played on the first trick.',
-      'Hearts cannot be LED until a heart has been discarded on another suit ("breaking hearts").',
+      'Every heart costs 1 point; the queen of spades costs 13. 26 points per hand, and you want none.',
+      'The 2♣ opens. No points on the first trick. Hearts cannot be LED until broken.',
+      'Default play: the highest card that still LOSES the trick. Duck high.',
+      'Keep a low club so the opening trick cannot force you onto lead with winners.',
     ],
   },
   {
-    title: 'Passing three',
+    title: 'Level 2 · Passing doctrine',
     body: [
-      'Pass rotates: left, right, across, then a hold hand with no pass.',
-      'Ship the queen of spades unless you hold three or more low spades to guard her.',
-      'Ace and king of spades are queen-bait: pass them unless you have spade length.',
-      'NEVER pass low spades: they are your armor against the queen.',
-      'Pass high hearts; keep low hearts as escape cards.',
-      'Aim passes at creating a void so you can dump points early.',
+      'The direction changes the pass. LEFT: your victim plays right after you; ship the lone dangerous card (the queen, a bare high spade) because it gets used against the table immediately.',
+      'RIGHT: they act BEFORE you, so you see their card first; pass conservatively and keep flexible holdings.',
+      'ACROSS: least information; pass neutral and never arm a strong player with moon material.',
+      'Spade guards: below 3 low spades, pass the queen. 3 is a bare guard, 5+ is comfortable. Keep her with guards and choose your victim.',
+      'A♠/K♠ with short spades are queen-bait: ship them. NEVER pass low spades.',
+      'Pass in pairs that compound: a low club with a high spade, or two high cards of one suit to strip it.',
+      'Pass high hearts, keep low hearts as escapes; build a club or diamond void, never a heart void you cannot use.',
     ],
   },
   {
-    title: 'Play',
+    title: 'Level 2 · Play',
     body: [
-      'Duck as high as you can: play the highest card that still loses the trick.',
-      'Lead low spades relentlessly if you do not hold the queen: someone has to eat her.',
-      'Keep track of who is void where: a void player turns your safe lead into 13 points.',
-      'Take an early clean trick rather than holding only winners for the end: the last tricks are where the hearts land.',
+      'Lead low spades relentlessly when you do not hold the queen: someone has to eat her.',
+      'Count in fours: tricks times four cards tells you what is gone; watch who showed void where.',
+      'A void opponent turns your safe lead into 13 points: route leads around known voids.',
+      'Read the pass you received: a queen plus spades, or three high hearts, is someone recruiting you into their plan.',
     ],
   },
   {
-    title: 'Shooting the moon',
+    title: 'Level 3 · The moon and the endgame',
     body: [
-      'Take ALL 26 points and everyone else eats 26 instead.',
-      'Shoot only with overwhelming high cards and a long strong suit, and preferably long hearts.',
-      'The defense against a shooter: take one heart yourself. Cheap insurance, watch for the player winning every point trick.',
+      'Shoot with 8+ hearts including the ace, or 4-or-fewer hearts backed by a 6+ card suit headed A-K. Anything less is a donation.',
+      'Moon tells: early tricks won with high cards, hearts untouched, an oddly low pass into your hand.',
+      'Moon defense: hold one stopper heart (the ace is best) and spend a point to save 26. Taking one heart off a shooter is the cheapest insurance in cards.',
+      'By the last 3-4 tricks, map the exact remaining hearts and the queen: advanced play is scripted, not reactive.',
+      'Exit cards are tempo: keep a losing card to hand the lead away, or the endgame forces you to lead into the pain.',
+      'Play the score, not just the hand: the table routes the queen toward the leader, and dumps her on the LAST-place player when protecting the race. Expect it when you lead.',
+    ],
+  },
+  {
+    title: 'Common mistakes',
+    body: [
+      'Hoarding A♠/K♠ with two spades under them.',
+      'Passing without a plan: random high cards instead of compounding pairs.',
+      'Treating all three pass directions the same.',
+      'Flying blind into the last four tricks.',
+      'Missing the moon tells until trick nine.',
+      'Minimizing your own points while the game leader coasts to the win.',
     ],
   },
 ];

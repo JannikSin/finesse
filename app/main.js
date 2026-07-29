@@ -7,27 +7,30 @@ import { game as euchre } from './games/euchre.js';
 import { game as hearts } from './games/hearts.js';
 import { game as ohhell } from './games/ohhell.js';
 import { game as rook } from './games/rook.js';
+import { game as bridge } from './games/bridge.js';
 
-const GAMES = [sheepshead, euchre, hearts, ohhell, rook];
+const GAMES = [sheepshead, euchre, hearts, ohhell, rook, bridge];
 const byId = Object.fromEntries(GAMES.map(g => [g.id, g]));
 
 // ---- persistence -----------------------------------------------------------
-const KEY = 'sheepdog.v2';
+const KEY = 'finesse.v1';
 function loadStats() {
   try {
-    const v2 = JSON.parse(localStorage.getItem(KEY));
-    if (v2 && v2.games) return v2;
+    const cur = JSON.parse(localStorage.getItem(KEY));
+    if (cur && cur.games) return cur;
   } catch { /* fall through */ }
   const fresh = { games: {}, table: {} };
   try {
-    // migrate v1 (sheepshead-only shape)
+    // migrate the sheepdog-era stores
+    const v2 = JSON.parse(localStorage.getItem('sheepdog.v2'));
+    if (v2 && v2.games) { localStorage.removeItem('sheepdog.v2'); return v2; }
     const v1 = JSON.parse(localStorage.getItem('sheepdog.v1'));
     if (v1 && v1.pick) {
       fresh.games.sheepshead = { pick: v1.pick, lead: v1.lead };
       fresh.table.sheepshead = v1.game;
       localStorage.removeItem('sheepdog.v1');
     }
-  } catch { /* corrupt v1: boot clean */ }
+  } catch { /* corrupt legacy: boot clean */ }
   return fresh;
 }
 let STATS = loadStats();
@@ -61,14 +64,14 @@ function App() {
   }, []);
   const { g, mode, home } = route();
   const back = home ? null : g && mode ? '#' + g.id : '#';
-  const title = home || !g ? 'Sheepdog'
+  const title = home || !g ? 'Finesse'
     : !mode ? g.name
     : mode === 'table' ? `${g.name} · At the Table`
     : mode === 'study' ? `${g.name} · Study`
     : `${g.name} · ${(g.drills.find(d => d.id === mode) || {}).title || g.name}`;
   return html`<div class="shell">
     <header>
-      ${back ? html`<a class="back" href=${back}>←</a>` : html`<span class="paw">\u{1F415}</span>`}
+      ${back ? html`<a class="back" href=${back}>←</a>` : html`<span class="paw">🃏</span>`}
       <h1>${title}</h1>
     </header>
     ${home || !g ? html`<${Home} />`

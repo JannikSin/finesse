@@ -1,32 +1,31 @@
-# Sheepdog
+# Finesse
 
-Learn sheepshead by making the decisions that matter.
+Learn card games by making the decisions that matter.
 
-A free, offline-capable trainer for the Wisconsin card game. No account, no ads,
-no network calls: everything runs in your browser.
+A free, offline-capable trainer for six classic games. No account, no ads, no
+network calls: everything runs in your browser.
 
-## Modes
-- **Pick or Pass** — endless dealt hands with a seat position. Decide, then see
-  what the book says and why.
-- **Find the Lead** — you are the picker, the partner, or a defender, with a
-  called ace on the table. Choose the opening lead and get graded.
-- **At the Table** — full 5-handed hands against four bots, with the called-ace
-  partner rules enforced and real game scoring (schneider and all).
-- **Study** — the rules, the trump order, and the classic picking guidelines.
+## Games
+| Game | Drills | Play vs bots |
+|---|---|---|
+| Sheepshead | pick-or-pass, opening lead | full 5-handed, called-ace rules |
+| Euchre | order/call (both rounds, "next"), lead | full, bowers + alone + stick-the-dealer |
+| Hearts | pass three | full, moon + breaking rules |
+| Oh Hell | the bid (dealer hook) | full, exact-or-bust scoring |
+| Rook | the bid (Kentucky Discard) | study + drills for now |
+| Bridge | opening bid, response, conventions, lead | full auction + dummy play (SAYC) |
 
-## Rules taught
-5-handed, called-ace partner, 61 to win, defenders take ties at 60. Strategy
-follows the standard American guidelines (Wergin school): pick with any 5 trump,
-two queens plus a trump, a queen plus three trump, or the black queens with
-position; picker leads trump; defenders lead the called suit.
+Every drill grades your choice against the book and tells you WHY. Every game
+carries a leveled study section, Level 1 rules through Level 3 advanced strategy,
+distilled from named strategy sources (ACBL SAYC booklet, sheepshead.org,
+ohioeuchre.com, Joe Andrews' columns, pagat.com, and more, cited per game).
 
 ## Develop
 No build step. Any static server at the repo root:
 
 ```
 npx serve
-node --test tests/engine.test.mjs
+npm test
 ```
 
-Vendored Preact + htm (see `vendor/VERSIONS.md` and `THIRD-PARTY-NOTICES` in the
-tally repo this was templated from).
+Vendored Preact + htm (see `vendor/VERSIONS.md` and `THIRD-PARTY-NOTICES.md`).

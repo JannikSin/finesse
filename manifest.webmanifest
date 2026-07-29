@@ -1,7 +1,7 @@
 {
-  "name": "Sheepdog",
-  "short_name": "Sheepdog",
-  "description": "Learn sheepshead: pick-or-pass drills, opening-lead drills, and full hands against bots.",
+  "name": "Finesse",
+  "short_name": "Finesse",
+  "description": "Learn card games by making the decisions: graded drills, strategy study, and full hands against bots.",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#0c2318",

@@ -126,39 +126,58 @@ function Table({ onResult }) {
 }
 
 // ---- study -----------------------------------------------------------------
+// Sources: pagat.com, cardanoir.com strategy essay, Rare Pike guide, and the
+// closed-form one-card probability analyses (Relevant Miscellany, Possibly Wrong).
 const STUDY = [
   {
-    title: 'The game',
+    title: 'Level 1 · The game',
     body: [
-      'Rounds deal DOWN: 7 cards, then 6, 5, 4, 3, 2, 1. After the deal, the next card is turned: its suit is trump.',
-      'Everyone bids the exact number of tricks they will take, in order from the dealer\'s left.',
-      'Score: hit your bid exactly and take 10 + your bid. Miss by any amount, in either direction: zero.',
-      'Taking too MANY tricks busts you just as hard as too few. Winning a trick you did not want is the classic loss.',
+      'Rounds deal DOWN: 7 cards, then 6, 5, 4, 3, 2, 1. The next card is turned: its suit is trump.',
+      'Everyone bids the exact number of tricks they will take, from the dealer\'s left.',
+      'Score: exact bid pays 10 + the bid. Any miss, either direction: zero. Too MANY tricks busts you just as hard.',
+      'Bid zero proudly: scattered low cards in several suits are a natural zero, and 10 points is 10 points.',
+      'The whole game is one skill: bid what your hand CANNOT AVOID taking, not what it might luckily take.',
     ],
   },
   {
-    title: 'The dealer hook',
+    title: 'Level 2 · Counting the bid',
     body: [
-      'The dealer bids last and may NOT bring the total bids equal to the tricks available. Someone must always be wrong.',
-      'When the hook forbids your honest number: round DOWN with a weak hand (easier to duck than to win), UP with a strong one.',
+      'Trump ace and king: near-certain tricks. Guarded off-suit kings about half. Queens little. Unguarded kings get eaten.',
+      'Small trump in a hand with trump length: about half a trick each, more in short rounds.',
+      'In small early hands, do not trust off-suit aces: they get trumped constantly. Do not dismiss low cards either.',
+      'Bid-order is information: the dealer sees every bid before choosing. Before the dealer, you are guessing what is behind you.',
+      'The total-bid gap is public: bids over tricks means someone MUST bust, tighten up. Bids well under means surplus tricks will land on somebody, maybe you.',
     ],
   },
   {
-    title: 'Counting your bid',
+    title: 'Level 2 · The hook and playing to N',
     body: [
-      'Aces are worth most of a trick. Guarded kings about half. Queens little. Unguarded kings get caught.',
-      'Trump: honors are near-certain tricks; small trump are worth about a third each, more in short rounds.',
-      'Bid zero proudly. A hand of low cards off-trump is a great zero, and 10 points is 10 points.',
-      'Short rounds swing: with 1 or 2 cards, whoever holds any trump usually takes it. Bid accordingly.',
+      'The dealer may not make bids sum to the tricks available. When the hook eats your honest number: round DOWN weak (ducking beats winning), UP strong.',
+      'A hooked dealer\'s bid is forced, not informative. Discount it when reading the table.',
+      'Under your bid: win cheaply with your smallest sufficient card. At your bid: duck everything, play just under the current winner.',
+      'Shed forced winners EARLY: a high card in a suit others are void in only gets more unavoidable each trick.',
+      'Trump is a dial: lead it when you need wins, bury it when you are done.',
     ],
   },
   {
-    title: 'Playing to your number',
+    title: 'Level 3 · Sharp play and short rounds',
     body: [
-      'Under your bid: win cheaply, spend your smallest winner that takes the trick.',
-      'At your bid: DUCK. Play the highest card that still loses; shed dangerous winners the moment you are void somewhere.',
-      'Watch other players\' bids: an overbidder will take your unwanted tricks for you, feed them.',
-      'The last trick of a round is where bids die. Track what is still out.',
+      'One-card rounds have exact math: bid 1 with nearly any trump (not the very lowest), never with an off-suit card. Leading beats following with the same card.',
+      'Made your bid already? An extra trick is worth nothing, so sharp cards have exactly one use: forcing an opponent who still needs a trick to overtake early and burn their winner.',
+      'Protecting your own number always outranks sabotage. Attack only when your bid cannot be hurt.',
+      'Track over/under patterns per player across rounds: chronically greedy bidders are more exploitable than any single hand.',
+      'The last trick is where bids die: know what is still out before it arrives.',
+    ],
+  },
+  {
+    title: 'Common mistakes',
+    body: [
+      'Counting off-suit aces as sure tricks in short hands.',
+      'Winning a trick out of habit after the bid is already made: the classic bust.',
+      'Sitting on a forced winner until the endgame makes it unavoidable.',
+      '"Any trump = bid 1" at every hand size: the lowest trump loses more than it wins.',
+      'Ignoring the total-bid gap, free information printed on the table.',
+      'Reading the dealer\'s hooked bid as a real opinion.',
     ],
   },
 ];

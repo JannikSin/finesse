@@ -1,4 +1,4 @@
-const CACHE = 'sheepdog-v2';
+const CACHE = 'finesse-v1';
 const PRECACHE = [
   './',
   './index.html',
@@ -21,6 +21,10 @@ const PRECACHE = [
   './app/games/ohhell.coach.js',
   './app/games/rook.js',
   './app/games/rook.logic.js',
+  './app/games/bridge.js',
+  './app/games/bridge.engine.js',
+  './app/games/bridge.bid.js',
+  './app/games/bridge.study.js',
   './vendor/preact/preact.module.js',
   './vendor/preact/hooks.module.js',
   './vendor/htm/htm.module.js',
@@ -37,7 +41,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k.startsWith('sheepdog-') && k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k.startsWith('finesse-') && k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });

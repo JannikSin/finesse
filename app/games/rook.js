@@ -36,41 +36,61 @@ const bidDrill = {
   },
 };
 
+// Sources: rookgame.com official rules + strategy series, pagat.com,
+// gamerules.com. Numbers below follow the 41-card, bids-70-120 family.
 const STUDY = [
   {
-    title: 'The deck',
+    title: 'Level 1 · The deck and the deal',
     body: [
       'Four colors (red, yellow, green, black), 5 through 14, plus the Rook bird: 41 cards.',
-      'Counters: 5s are worth 5, 10s and 14s worth 10, the Rook worth 20. 120 points per hand.',
-      '14 is the high card of each color. The Rook is the LOWEST trump (house rules vary; agree before the deal).',
-      'Four players in partnerships, 9 cards each, 5 to the kitty (the "nest").',
+      'Counters: each 5 worth 5, each 10 and 14 worth 10, the Rook worth 20. 120 points per hand.',
+      '14 is the high card of each color. The Rook is trump; whether it plays HIGH or LOW is a house rule, agree before the deal (high is the common default).',
+      'Four players in partnerships, 9 cards each, 5 to the nest (kitty).',
+      'Follow the led color; trump wins; trick winner leads. Whoever takes the LAST trick also captures the discarded nest and its points.',
     ],
   },
   {
-    title: 'The auction',
+    title: 'Level 2 · Bidding',
     body: [
-      'Bidding opens at 70 and rises by 5s; the high bidder takes the kitty, discards 5, and names trump.',
-      'Your bid is a contract: capture at least that many of the 120 points or lose the whole bid ("the set").',
-      'Count your hand: 10 per expected trump, extra for 13s/14s in your color, the bird is worth a full bump.',
-      'The kitty is worth roughly one bid step: it adds cards, but you have not seen them. Never pay 15 for it.',
-      'Partner covers about 20-30 points of any bid. Bidding 110+ means YOUR hand does nearly everything.',
+      'Bids open at 70, rise by 5s. High bidder takes the nest, discards 5, names trump. Make the bid or LOSE the whole bid ("set"); defenders always keep what they capture.',
+      'Count assets: a real trump suit, the Rook, two 14s, a void. Two assets: open 70. Three: 75. Four: 80. Each extra genuine asset is one more step.',
+      'Length beats tops: six trump with weak tops outplays four big ones. "The longer your suit, the fewer high cards you need."',
+      'The nest averages about 15 points (120 × 5/41) but swings 0-45. Bid your NINE cards; the nest is upside, not income.',
+      'Loose 5s and 10s in side suits are liabilities when you are declaring: points you can lose, not points you control.',
+      'Raise over your own partner only to 100, and past 100 only with 7+ trump including 3 of the top 5.',
+      'Sustained enemy raising is information: the Rook and the suit tops are with them, not waiting in the nest. Pass good hands into hot auctions.',
     ],
   },
   {
-    title: 'The discard (Kentucky Discard)',
+    title: 'Level 2 · The discard',
     body: [
-      'Winning the kitty means discarding 5. Discarded counters are safe: they count for your side in most house rules; agree first.',
-      'Discard toward voids in your off colors so trump can take the counter tricks.',
-      'Never discard trump, and never strand your 14s bare if the color might get led twice.',
+      'Aim to leave yourself two-suited: trump plus one strong side color.',
+      'Void whole colors: a void trumps the first lead of it.',
+      'Shed unprotected lone 14s and 10s: a bare big counter is 10 points delivered to whoever leads the color.',
+      'Never discard trump. Point cards in the nest come back to whoever wins the last trick, so bury points only when your side expects to win it.',
     ],
   },
   {
-    title: 'Play',
+    title: 'Level 3 · Play and the set',
     body: [
-      'Follow the led color; trump wins the trick; the winner leads next.',
-      'Declarer pulls trump first, exactly like every other trump game.',
-      'Defense: bank your 5s and 10s onto your partner\'s winning tricks, and make the declarer trump early and often.',
-      'The set is the game. If the declarer bid 95, defenders need only 26 of the 120 to break the contract.',
+      'Declarer pulls trump early and repeatedly: be the only one holding trump when the endgame arrives.',
+      'Name trump by length first (7+ is a lock); a shorter but topped suit can still pull all outstanding trump in 3-4 leads.',
+      'Defense runs on the set math: points-to-set = bid minus what declarer has banked. Close hands are decided by 5 points, so COUNT.',
+      'Sluff the smallest counter that still sets; hoard the 10s and the Rook until the set is safe, then dump everything unprotected.',
+      'Offense mirror: once the bid is safe, stop fighting and bank counters onto partner\'s winners.',
+      'Fight for the last trick: the buried nest can swing 20+ points after trump is gone.',
+    ],
+  },
+  {
+    title: 'Common mistakes',
+    body: [
+      'Overbidding short, top-heavy suits.',
+      'Keeping bare 14s instead of discarding them.',
+      'Not pulling trump as declarer.',
+      'Losing count of banked points and fighting for tricks that no longer matter, or conceding hands still makeable.',
+      'Raising a committed partner without a monster.',
+      'Bidding into a hot auction because "my hand is good."',
+      'Sleepwalking through the last trick and donating the nest.',
     ],
   },
 ];

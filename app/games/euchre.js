@@ -185,50 +185,68 @@ function Table({ onResult }) {
 }
 
 // ---- study -----------------------------------------------------------------
+// Sources: ohioeuchre.com, Joe Andrews (Complete Win at Euchre columns),
+// euchre.cards, pagat.com, Euchre Universe card-odds simulation.
 const STUDY = [
   {
-    title: 'The deck and the bowers',
+    title: 'Level 1 · The deck and the bowers',
     body: [
-      '24 cards: A K Q J 10 9 in each suit. Four players, two teams, partners across.',
-      'Trump is named each hand. The jack of trump is the RIGHT BOWER, the highest card. The jack of the same color is the LEFT BOWER, second highest, and counts as a trump, not its own suit.',
-      'Trump order: right bower, left bower, A, K, Q, 10, 9. Off suits rank A K Q (J) 10 9.',
-      'Five cards each, five tricks. Your team needs three.',
+      '24 cards: A K Q J 10 9 in each suit. Four players, two teams, partners across. Five tricks; your team needs three. Game to 10.',
+      'The jack of trump is the RIGHT BOWER, highest card in play. The jack of the same color is the LEFT BOWER, second highest, and counts as trump, not its printed suit.',
+      'Trump order: right, left, A, K, Q, 10, 9. Off suits: A K Q (J) 10 9.',
+      'Makers take 3-4: 1 point. March (all five): 2. Alone march: 4. Makers under 3: EUCHRED, defenders score 2.',
     ],
   },
   {
-    title: 'Calling: round one',
+    title: 'Level 1 · The two calling rounds',
     body: [
-      'The top card of the kitty is turned up. From the dealer\'s left, each player may order it up (that suit becomes trump and THE DEALER picks up the card) or pass.',
-      'Order with: three trump including a bower, or both bowers, or two trump plus two off aces when the dealer is your partner.',
-      'Remember who gets the card: ordering into the other side\'s dealer hands them a free trump. Be a full trick stronger.',
-      'The dealer counts the upcard as a sixth card, keeps five, and buries one.',
+      'Round one: the upcard may be ordered up; THE DEALER takes it and buries a card. Ordering into the wrong dealer gifts a trump.',
+      'Round two: the card turns down and its suit is dead; any other suit may be named. Stick the dealer: dealer must call on the final pass.',
+      'Going alone: declare it and your partner sits out; the 4-point march is the biggest swing in the game.',
     ],
   },
   {
-    title: 'Calling: round two and "next"',
+    title: 'Level 2 · Calling by seat',
     body: [
-      'All pass: the card is turned down, and its suit may no longer be called. A second round of calling any other suit follows.',
-      'The NEXT convention: first seat calls the same color as the turndown with as little as two trump and a bower. Logic: the dealer passed on that color, so the bowers are likely live in your hand or your partner\'s.',
-      'Stick the dealer: if everyone passes twice, the dealer must call something. No thrown-in hands.',
-      'Going alone: with both bowers and length, declare alone. Your partner sits out and a march pays 4 instead of 2.',
+      'First seat orders with about 3 trump including a bower, or a bower + trump honor + two off aces. You are giving the DEALER a trump: be a full trick stronger.',
+      'Second seat (dealer\'s partner) assists light: two trump plus an off ace helps your own side\'s dealer.',
+      'Dealer picks up with 2 trump counting the upcard plus an ace, or any three trump.',
+      'Round two, first seat: call NEXT (same color as the turndown) with as little as two trump and a bower. The dealer passed that color, so its bowers are likely live with you or partner.',
+      'Reverse next (dealer\'s partner, round two): call the OPPOSITE color, minimum about K-9 suited with an off ace. A forum-grade tool, use sparingly.',
+      'The card odds (simulation): right bower wins its trick 100%, left 76%, trump ace 53%, trump king 45%, off-suit ace about 50%, "next"-suit ace only 44%.',
     ],
   },
   {
-    title: 'Play and leads',
+    title: 'Level 2 · Leads and play',
     body: [
-      'Follow the led suit if you can; the left bower belongs to the trump suit, not its printed suit.',
-      'Makers lead trump: pull two of theirs for one of yours, starting with the right bower.',
-      'Defenders lead off-suit aces and singletons, never trump into the makers.',
-      'Second hand low, third hand high: the classic whist rules apply.',
-      'Count the bowers. Five trump gone means your king of trump is boss.',
+      'Makers lead trump, right bower first: pull two of theirs for one of yours. Defenders NEVER lead trump into the makers.',
+      'Defenders lead off-suit aces and singletons; lead your LONG suit against a loner (best odds partner is void and can ruff).',
+      'Second hand low, third hand high. Do not trump your partner\'s ace.',
+      'Dealer\'s discard builds a void: read it, everyone else will.',
+      'When to go alone: both bowers + trump ace or a side ace is near-automatic; one bower + trump ace + two side aces is favorable. Three sure tricks in your own hand is the test: a failed loner costs the same as a failed call.',
     ],
   },
   {
-    title: 'Scoring',
+    title: 'Level 3 · Score-craft and inference',
     body: [
-      'Makers take 3 or 4 tricks: 1 point. All five (a march): 2 points. Alone march: 4.',
-      'Makers fail (under 3): EUCHRED, defenders score 2.',
-      'Game to 10. The euchre threat is the whole game: a thin call risks a 2-point swing.',
+      'At 9-9 call only real hands: an opposing euchre ends the game.',
+      'Down 6-8: hunt loners, a 4-pointer closes the gap. Up big: tighten.',
+      'The donation ("Bridge" rule): at 9 against opponents on 6-7, order up even on trash. Eating a 2-point euchre beats handing them a 4-point loner.',
+      'Pass-and-punish under stick-the-dealer: pass a mediocre round-one hand to force a weak dealer into a call your side can euchre.',
+      'Card-reading: a round-two call after the dealer\'s team passed marks the dealer weak in the turned color. The maker burning the right bower on a middling lead marks them short in trump.',
+      'A hand void in two suits is worth about a quarter-trick more than its cards: early ruffs are real value.',
+      'Do not bushwhack: passing a strong round-one hand to trap usually just hands round two to someone else.',
+    ],
+  },
+  {
+    title: 'Common mistakes',
+    body: [
+      'Overcalling weak hands: a euchre is a 2-point gift.',
+      'Never going alone with Tier-1 hands: 4-point swings left on the table.',
+      'Trumping partner\'s ace.',
+      'Leading a bare ace against a loner instead of your long suit.',
+      'Leading trump on defense.',
+      'Bidding the same from every seat, and ignoring the score.',
     ],
   },
 ];
