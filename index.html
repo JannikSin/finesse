@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self' 'sha256-VPh/cwxl4TOTEAiG9s91K+0n/mgugXoAuvlnpiBhCCk='; base-uri 'none'; form-action 'none'; object-src 'none'"
+  />
+  <title>Sheepdog</title>
+  <meta name="description" content="Learn sheepshead: pick-or-pass drills, opening-lead drills, and full hands against bots." />
+  <meta name="theme-color" content="#0c2318" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Sheepdog" />
+  <link rel="icon" type="image/png" href="./icons/icon-192.png" />
+  <link rel="stylesheet" href="./app/styles.css" />
+</head>
+<body>
+  <script type="importmap">
+    {
+      "imports": {
+        "preact": "./vendor/preact/preact.module.js",
+        "preact/hooks": "./vendor/preact/hooks.module.js",
+        "htm": "./vendor/htm/htm.module.js",
+        "htm/preact": "./vendor/htm/preact.module.js"
+      }
+    }
+  </script>
+  <div id="app"></div>
+  <script type="module" src="./app/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "name": "sheepdog",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/engine.test.mjs",
+    "icons": "node tools/make-icons.mjs"
+  }
+}
