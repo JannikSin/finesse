@@ -1,11 +1,11 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DECK, TRUMP, points, handPoints, isTrump, effSuit, beats, trickWinner,
   deal, newHand, pass, pick, buryAndCall, callableSuits, legalMoves,
   currentTurn, playCard, score, sortHand,
-} from '../app/engine.js';
-import { evalPick, suggestBury, gradeLeads, botPickDecision, botPlay } from '../app/coach.js';
+} from '../app/games/sheepshead.engine.js';
+import { evalPick, suggestBury, gradeLeads, botPickDecision, botPlay } from '../app/games/sheepshead.coach.js';
 
 // deterministic rng
 const rng = (seed => () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31)(42);
@@ -176,10 +176,11 @@ test('coach: lead grades', () => {
 
 test('rules module purity: engine and coach import nothing external', async () => {
   const fs = await import('node:fs');
-  for (const f of ['engine.js', 'coach.js', 'study.js']) {
-    const src = fs.readFileSync(new URL(`../app/${f}`, import.meta.url), 'utf8');
+  for (const f of ['sheepshead.engine.js', 'sheepshead.coach.js', 'sheepshead.study.js', 'euchre.engine.js', 'euchre.coach.js', 'hearts.engine.js', 'hearts.coach.js', 'ohhell.engine.js', 'ohhell.coach.js', 'rook.logic.js']) {
+    const src = fs.readFileSync(new URL(`../app/games/${f}`, import.meta.url), 'utf8');
     const imports = [...src.matchAll(/from '([^']+)'/g)].map(m => m[1]);
     imports.forEach(i => assert.ok(i.startsWith('./'), `${f} imports only siblings, got ${i}`));
     assert.ok(!/innerHTML|eval\(|new Function/.test(src), `${f} clean`);
   }
 });
+

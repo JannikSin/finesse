@@ -5,7 +5,7 @@
 import {
   FAIL_SUITS, isTrump, suitOf, effSuit, points, handPoints, trumpPower,
   legalMoves, currentTurn, trickWinner, beats, callableSuits, sortHand,
-} from './engine.js';
+} from './sheepshead.engine.js';
 
 const trumps = h => h.filter(isTrump);
 const queens = h => h.filter(c => c[0] === 'Q');

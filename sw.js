@@ -1,13 +1,26 @@
-const CACHE = 'sheepdog-v1';
+const CACHE = 'sheepdog-v2';
 const PRECACHE = [
   './',
   './index.html',
   './manifest.webmanifest',
   './app/styles.css',
   './app/main.js',
-  './app/engine.js',
-  './app/coach.js',
-  './app/study.js',
+  './app/cards.js',
+  './app/games/sheepshead.js',
+  './app/games/sheepshead.engine.js',
+  './app/games/sheepshead.coach.js',
+  './app/games/sheepshead.study.js',
+  './app/games/euchre.js',
+  './app/games/euchre.engine.js',
+  './app/games/euchre.coach.js',
+  './app/games/hearts.js',
+  './app/games/hearts.engine.js',
+  './app/games/hearts.coach.js',
+  './app/games/ohhell.js',
+  './app/games/ohhell.engine.js',
+  './app/games/ohhell.coach.js',
+  './app/games/rook.js',
+  './app/games/rook.logic.js',
   './vendor/preact/preact.module.js',
   './vendor/preact/hooks.module.js',
   './vendor/htm/htm.module.js',
@@ -24,7 +37,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k.startsWith('sheepdog-') && k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
