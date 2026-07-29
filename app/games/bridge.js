@@ -140,7 +140,7 @@ const leadDrill = {
       right: tier === bestTier,
       title: TIER_WORDS[tier],
       lead: `${cardLabel(card)}: ${why}`,
-      detail: tier === bestTier ? [] : [`Best here: ${best.slice(0, 3).map(cardLabel).join(', ')} — ${grades[best[0]][1]}`],
+      detail: tier === bestTier ? [] : [`Best here: ${best.slice(0, 3).map(cardLabel).join(', ')}. ${grades[best[0]][1]}`],
     };
   },
 };

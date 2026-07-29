@@ -104,7 +104,7 @@ export function adviseMove(s, seat, level = 'expert') {
       if (shooter >= 0 && s.trickSeats[winIdx] === shooter) {
         const over = follow.filter(c => rankIdx(c) > winRank);
         if (over.length) {
-          return { card: low(over), why: 'Moon alert: one player owns every point so far. Take this trick — one heart now beats 26 later.' };
+          return { card: low(over), why: 'Moon alert: one player owns every point so far. Take this trick: one heart now beats 26 later.' };
         }
       }
     }

@@ -85,7 +85,7 @@ const leadDrill = {
       right,
       title: TIER_WORDS[tier],
       lead: `${rankLabel(card[0])}${GLYPH[card[1]]}: ${why}`,
-      detail: right ? [] : [`Best here: ${best.map(c => rankLabel(c[0]) + GLYPH[c[1]]).join(', ')} — ${grades[best[0]][1]}`],
+      detail: right ? [] : [`Best here: ${best.map(c => rankLabel(c[0]) + GLYPH[c[1]]).join(', ')}. ${grades[best[0]][1]}`],
     };
   },
 };

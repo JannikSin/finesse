@@ -45,6 +45,52 @@ const tableStats = gid => {
   return STATS.table[gid];
 };
 
+// ---- tour ------------------------------------------------------------------
+// Lesson learned on Mise: a tour must NEVER trap anyone. Skip is always
+// visible, tapping outside closes it, any dismissal marks it done, and
+// ?notour=1 is the escape hatch.
+const TOUR = [
+  {
+    title: 'Welcome to Finesse',
+    body: 'This app teaches card games by letting you make the real decisions and telling you why the book agrees or disagrees. Pick a game from the home screen to start. Nothing here needs an account or the internet.',
+  },
+  {
+    title: 'Drills',
+    body: 'Each game has short drills: you get a hand, you make one decision (pick or pass, what to bid, what to lead), and the coach grades it with the reasoning spelled out. A few minutes of drills a day is the whole idea.',
+  },
+  {
+    title: 'At the Table',
+    body: 'Play full hands against computer players. Choose how strong they are with the buttons above your cards: novice, solid, expert, or a mixed table. When it is your turn, your row lights up gold and says "your turn". Just tap a bright card.',
+  },
+  {
+    title: 'The coach',
+    body: 'Leave "coach on" and every time it is your move, a gold note shows the card the book would play and the reason. Turn it off any time for an honest test of what stuck.',
+  },
+  {
+    title: 'Study',
+    body: 'Each game has a Study page: Level 1 is the rules, Level 3 is real strategy. Read one level, drill it, then come back for the next. That is the whole tour. Good luck at the table!',
+  },
+];
+
+function Tour({ onDone }) {
+  const [i, setI] = useState(0);
+  const step = TOUR[i];
+  return html`<div class="tour-backdrop" onClick=${e => { if (e.target === e.currentTarget) onDone(); }}>
+    <div class="tour-card">
+      <h2>${step.title}</h2>
+      <p>${step.body}</p>
+      <span class="tour-dots">${TOUR.map((_, d) => (d === i ? '●' : '○')).join(' ')}</span>
+      <div class="tour-row">
+        <button class="skip" onClick=${onDone}>Skip the tour</button>
+        ${i > 0 && html`<button class="hint" onClick=${() => setI(i - 1)}>Back</button>`}
+        <button class="big" onClick=${() => (i + 1 < TOUR.length ? setI(i + 1) : onDone())}>
+          ${i + 1 < TOUR.length ? 'Next' : 'Done'}
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
 // ---- shell -----------------------------------------------------------------
 const LEGACY = { pick: 'sheepshead/pick', lead: 'sheepshead/lead', table: 'sheepshead/table', study: 'sheepshead/study' };
 
@@ -55,8 +101,11 @@ function route() {
   return { g: byId[gid] || null, mode: mode || null, home: !gid };
 }
 
+if (new URLSearchParams(location.search).has('notour')) localStorage.setItem('finesse.tour', 'done');
+
 function App() {
   const [, redraw] = useState(0);
+  const [tour, setTour] = useState(() => !localStorage.getItem('finesse.tour'));
   useEffect(() => {
     const f = () => redraw(n => n + 1);
     addEventListener('hashchange', f);
@@ -69,10 +118,13 @@ function App() {
     : mode === 'table' ? `${g.name} · At the Table`
     : mode === 'study' ? `${g.name} · Study`
     : `${g.name} · ${(g.drills.find(d => d.id === mode) || {}).title || g.name}`;
+  const endTour = () => { localStorage.setItem('finesse.tour', 'done'); setTour(false); };
   return html`<div class="shell">
+    ${tour && html`<${Tour} onDone=${endTour} />`}
     <header>
       ${back ? html`<a class="back" href=${back}>←</a>` : html`<span class="paw">🃏</span>`}
       <h1>${title}</h1>
+      <button class="helpbtn" title="Show the tour" onClick=${() => setTour(true)}>?</button>
     </header>
     ${home || !g ? html`<${Home} />`
       : !mode ? html`<${GameMenu} g=${g} />`
@@ -88,7 +140,7 @@ function App() {
 
 function Home() {
   return html`<div class="home">
-    <p class="tag">Learn card games by making the decisions that matter.</p>
+    <p class="tag">Learn card games by making the decisions that matter. Tap a game to start, or tap ? for a tour.</p>
     ${GAMES.map(g => {
       const gs = STATS.games[g.id] || {};
       const tot = Object.values(gs).reduce((n, d) => n + d.total, 0);

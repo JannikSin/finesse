@@ -103,7 +103,7 @@ function Table({ onResult }) {
           <span class="who">${NAMES[trick.seats[i]]}</span><${Card} c=${c} toView=${toView} small />
         </div>`)}
       </div>
-      ${g.showTrick && html`<p class="callinfo">${NAMES[g.showTrick.winner]} takes it${g.showTrick.cards.some(isPoint) ? ' — with points' : ''}</p>`}
+      ${g.showTrick && html`<p class="callinfo">${NAMES[g.showTrick.winner]} takes it${g.showTrick.cards.some(isPoint) ? ', with points' : ''}</p>`}
     </div>
 
     ${s.phase === 'done' && html`<div class="verdict ${s.result.delta[0] === Math.min(...s.result.delta) ? 'good' : 'bad'}">
@@ -123,7 +123,7 @@ function Table({ onResult }) {
 
     ${myPass && g.coach && (() => {
       const best = bestPass(s.hands[0]);
-      return html`<${CoachNote} text=${`Book pass: ${best.map(c => rankLabel(c[0]) + GLYPH[c[1]]).join(', ')} — ${passValue(s.hands[0], best[0])[1]}`} />`;
+      return html`<${CoachNote} text=${`Book pass: ${best.map(c => rankLabel(c[0]) + GLYPH[c[1]]).join(', ')}. ${passValue(s.hands[0], best[0])[1]}`} />`;
     })()}
     ${myPlay && g.coach && (() => {
       const adv = adviseMove(s, 0, 'expert');

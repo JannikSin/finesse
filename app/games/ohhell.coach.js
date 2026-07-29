@@ -84,11 +84,11 @@ export function adviseMove(s, seat, level = 'expert') {
     return { card: low(winners), why: 'You need this trick: take it with the smallest card that wins.' };
   }
   if (!need && legal.some(c => !beatsWin(c))) {
-    return { card: high(legal.filter(c => !beatsWin(c))), why: 'At your bid: duck high — shed the biggest card that still loses.' };
+    return { card: high(legal.filter(c => !beatsWin(c))), why: 'At your bid: duck high, shed the biggest card that still loses.' };
   }
   return {
     card: low(legal),
     why: need ? 'Cannot win this one: throw your smallest and wait for your tricks.'
-      : 'Every card wins — the small one keeps future tricks smaller.',
+      : 'Every card wins: the small one keeps future tricks smaller.',
   };
 }

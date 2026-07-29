@@ -313,7 +313,7 @@ export function adviseMove(a, seat, level = 'expert') {
   if (winners.length) {
     const nonTrumpWinners = winners.filter(c => !trump || c[1] !== trump);
     const card = nonTrumpWinners.length ? low(nonTrumpWinners) : low(winners);
-    return { card, why: 'Third hand high — but no higher than the trick needs.' };
+    return { card, why: 'Third hand high, but no higher than the trick needs.' };
   }
   return { card: low(legal), why: 'Cannot beat it: second hand low, save the honors for later.' };
 }
