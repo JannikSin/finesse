@@ -37,10 +37,20 @@ header comment of each study section / game file.
   tagline, toView, study, drills, Table }`. Drills: `{ id, title, hint,
   kind: 'choice'|'card'|'cards', count?, scene(), grade(scene, answer) }`.
 - `app/games/<game>.engine.js` — pure rules, ZERO imports (rook: `rook.logic.js`).
-- `app/games/<game>.coach.js` — heuristics + bot policy, imports engine only
-  (bridge: `bridge.bid.js` holds the SAYC brain).
-  Engines/coaches must never import htm/preact (node tests load them directly).
-- `tests/` — engine.test.mjs (sheepshead), games.test.mjs, bridge.test.mjs: `npm test`.
+  Trick-history recording (`s.history`) is public info bots may count from.
+- `app/games/<game>.coach.js` — heuristics + LEVELED bot policy, imports engine
+  only (bridge: `bridge.bid.js`). Levels: novice (deliberate period-correct
+  mistakes) / solid (book) / expert (adds counting + inference). Each coach
+  exports `adviseMove(state, seat, level) -> {card, why}`: bots take the card,
+  the human coach note shows both. HONESTY RULE (sheepshead): bots never read
+  hidden team membership — knownSide() models what each seat can actually know;
+  tests enforce it. Engines/coaches must never import htm/preact.
+- `app/cards.js` — also holds table prefs (bot level, coach mode, `finesse.level`
+  / `finesse.coach` in localStorage), TableControls and CoachNote widgets.
+- `tests/` — engine/games/bridge unit tests + `sim.test.mjs`: all-bot full-table
+  simulations at every level (legality-checked every move) and seeded
+  skill-ladder assertions (expert beats novice in all five playable games).
+  `npm test` (58 tests).
 
 ## Adding a game
 1. `<game>.engine.js` (pure) + `<game>.coach.js` (pure) + `<game>.js` (module).
