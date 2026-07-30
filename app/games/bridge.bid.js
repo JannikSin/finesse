@@ -10,6 +10,13 @@ import {
 const GL = { C: '♣', D: '♦', H: '♥', S: '♠', N: 'NT' };
 export const callLabel = c => (c === 'P' ? 'Pass' : `${c[0]}${GL[c[1]]}`);
 
+// Opening threshold. Book SAYC opens 13+ total points; David's home game opens
+// 12 (Standard American played light, the modern 2/1 style). bridge.js sets it
+// from the saved pref; drills, bots and the coach all follow it.
+let OPEN_MIN = 13;
+export const setOpenMin = n => { OPEN_MIN = n === 12 ? 12 : 13; };
+export const getOpenMin = () => OPEN_MIN;
+
 const len = (hand, su) => suitCards(hand, su).length;
 const longest = hand => [...SUITS].sort((a, b) => len(hand, b) - len(hand, a) || SUITS.indexOf(b) - SUITS.indexOf(a))[0];
 const goodSuit = (hand, su) => suitCards(hand, su).filter(c => 'AKQJT'.includes(c[0])).length >= 2;
@@ -22,7 +29,7 @@ export function openingBid(hand) {
   if (p >= 22) return { call: '2C', why: why('22+ points: open 2♣, the artificial strong bid. Any other opening risks being passed out.') };
   if (p >= 20 && p <= 21 && isBalanced(hand)) return { call: '2N', why: why('20-21 balanced: 2NT describes this hand in one bid.') };
   if (p >= 15 && p <= 17 && isBalanced(hand)) return { call: '1N', why: why('15-17 balanced: the 1NT opening. The most descriptive call in the system.') };
-  if (tp >= 13) {
+  if (tp >= OPEN_MIN) {
     if (len(hand, 'S') >= 5 && len(hand, 'S') >= len(hand, 'H')) return { call: '1S', why: why('Opening points with a 5-card spade suit: majors need five to open.') };
     if (len(hand, 'H') >= 5) return { call: '1H', why: why('Opening points with a 5-card heart suit: majors need five to open.') };
     if (len(hand, 'D') >= len(hand, 'C') && len(hand, 'D') >= 4) return { call: '1D', why: why('No 5-card major: open the longer minor.') };
@@ -38,7 +45,7 @@ export function openingBid(hand) {
   if (len(hand, lg) >= 7 && p >= 5 && p <= 10 && lg !== 'C') {
     return { call: '3' + lg, why: why(`A 7-card suit with weak values: preempt at the three level and steal their auction.`) };
   }
-  return { call: 'P', why: why('Under 13 points with no preempt shape: pass. Discipline now pays later.') };
+  return { call: 'P', why: why(`Under ${OPEN_MIN} points with no preempt shape: pass. Discipline now pays later.`) };
 }
 
 // ---- responses -------------------------------------------------------------

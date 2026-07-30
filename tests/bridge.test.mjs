@@ -111,3 +111,52 @@ test('bridge: lead grading', () => {
   const under = gradeLeads(['AS', '2S', '3S', '4S', 'QH', '2H', '3H', '2D', '3D', '4D', '2C', '3C', '4C'], { strain: 'H', level: 4 });
   assert.equal(under.grades['2S'][0], 'terrible'); // underleading an ace vs suit
 });
+
+test('bridge: opening threshold toggle (12 vs 13)', async () => {
+  const { setOpenMin, getOpenMin } = await import('../app/games/bridge.bid.js');
+  // 12 HCP, flat, no 5-card major: book passes, home game opens 1C
+  const hand = ['KS', 'QS', '2S', 'KH', '3H', '4H', 'KD', '5D', '6D', 'JC', '7C', '8C', '2C'];
+  assert.equal(getOpenMin(), 13);
+  assert.equal(openingBid(hand).call, 'P');
+  setOpenMin(12);
+  assert.equal(getOpenMin(), 12);
+  assert.equal(openingBid(hand).call, '1C');
+  setOpenMin(99); // anything not 12 snaps back to book
+  assert.equal(getOpenMin(), 13);
+  assert.equal(openingBid(hand).call, 'P');
+});
+
+test('bridge: convention quiz bank is well-formed', async () => {
+  const { CONVENTIONS, QUIZ } = await import('../app/games/bridge.conventions.js');
+  assert.ok(CONVENTIONS.length >= 10);
+  const ids = new Set(CONVENTIONS.map(c => c.id));
+  assert.equal(ids.size, CONVENTIONS.length, 'unique ids');
+  for (const c of CONVENTIONS) {
+    assert.ok(c.name && c.bid && c.when && c.trap, c.id);
+    assert.ok(c.schedule.length >= 3, c.id + ' schedule');
+    assert.ok(c.quiz.length >= 2, c.id + ' quiz');
+    for (const q of c.quiz) {
+      assert.ok(q.choices.length >= 2 && Number.isInteger(q.a), c.id);
+      assert.ok(q.a >= 0 && q.a < q.choices.length, c.id + ' answer in range');
+      assert.ok(q.q && q.why, c.id + ' prose');
+    }
+  }
+  assert.equal(QUIZ.length, CONVENTIONS.reduce((n, c) => n + c.quiz.length, 0));
+});
+
+test('bridge: bid-only auctions terminate at both opening thresholds', async () => {
+  const { setOpenMin } = await import('../app/games/bridge.bid.js');
+  for (const min of [13, 12]) {
+    setOpenMin(min);
+    let contracts = 0;
+    for (let n = 0; n < 60; n++) {
+      const a = B.newAuction(n % 4, B.deal(Math.random));
+      let guard = 0;
+      while (a.phase === 'auction' && guard++ < 80) B.makeCall(a, a.turn, botCall(a, a.turn, 'solid'));
+      assert.ok(a.phase === 'play' || a.phase === 'passout', 'auction ends');
+      if (a.contract) { contracts++; assert.ok(a.contract.declarer >= 0 && a.contract.declarer <= 3); }
+    }
+    assert.ok(contracts > 15, `bots reach contracts opening on ${min}`);
+  }
+  setOpenMin(13);
+});

@@ -228,6 +228,17 @@ button.hint {
 .study h2 { font-size: 1.15rem; color: var(--brass); margin-bottom: 8px; }
 .study ul { padding-left: 22px; display: grid; gap: 7px; color: var(--chalk); line-height: 1.5; }
 
+/* conventions reference */
+details.conv { margin-bottom: 10px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 10px 14px; }
+details.conv summary { cursor: pointer; color: var(--brass); font-size: 1.05rem; padding: 2px 0; }
+details.conv[open] summary { margin-bottom: 8px; }
+details.conv .scene { margin-bottom: 8px; }
+details.conv ul { margin-bottom: 8px; }
+
+/* bid-the-hand reveal */
+.reveal { margin-top: 10px; }
+.reveal .callinfo { text-align: left; padding: 2px 0; }
+
 @media (max-width: 460px) {
   :root { --card-w: 48px; --card-h: 70px; --card-rank: 1.05rem; --card-suit: 1.2rem; }
   .opp { font-size: 0.8rem; flex-wrap: wrap; }

@@ -117,6 +117,7 @@ function App() {
     : !mode ? g.name
     : mode === 'table' ? `${g.name} · At the Table`
     : mode === 'study' ? `${g.name} · Study`
+    : g.screens && g.screens[mode] ? `${g.name} · ${g.screens[mode].title}`
     : `${g.name} · ${(g.drills.find(d => d.id === mode) || {}).title || g.name}`;
   const endTour = () => { localStorage.setItem('finesse.tour', 'done'); setTour(false); };
   return html`<div class="shell">
@@ -134,6 +135,11 @@ function App() {
           t.hands++; if (r.won) t.won++; t.score += r.delta || 0;
           saveStats();
         }} key=${g.id} />`
+      : g.screens && g.screens[mode] ? html`<${g.screens[mode].C} onResult=${r => {
+          const st = drillStats(g.id, mode);
+          st.total++; if (r.right) { st.right++; st.streak++; } else st.streak = 0;
+          saveStats();
+        }} key=${g.id + mode} />`
       : html`<${Drill} g=${g} drill=${g.drills.find(d => d.id === mode) || g.drills[0]} key=${g.id + mode} />`}
   </div>`;
 }
@@ -161,6 +167,12 @@ function GameMenu({ g }) {
     ${g.drills.map(d => html`<a class="tile" href=${'#' + g.id + '/' + d.id}>
       <b>${d.title}</b><span>${d.hint} · ${pct((STATS.games[g.id] || {})[d.id])}</span>
     </a>`)}
+    ${Object.entries(g.screens || {}).map(([id, s]) => {
+      const st = (STATS.games[g.id] || {})[id];
+      return html`<a class="tile" href=${'#' + g.id + '/' + id}>
+        <b>${s.title}</b><span>${s.hint}${st && st.total ? ` · ${pct(st)}` : ''}</span>
+      </a>`;
+    })}
     ${g.Table ? html`<a class="tile" href=${'#' + g.id + '/table'}>
       <b>At the Table</b><span>Play full hands against the bots.${t ? ` ${t.hands} hands, ${t.won} won.` : ''}</span>
     </a>` : html`<div class="tile dim"><b>At the Table</b><span>Bots for ${g.name} are on the bench: drills and study first.</span></div>`}

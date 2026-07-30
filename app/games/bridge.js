@@ -14,9 +14,15 @@ import {
 import {
   openingBid, responseTo, staymanReply, transferReply, blackwoodReply,
   botCall, botPlay, gradeLeads, callLabel, aces as countAces,
-  adviseCall, adviseMove,
+  adviseCall, adviseMove, setOpenMin, getOpenMin,
 } from './bridge.bid.js';
 import { STUDY } from './bridge.study.js';
+import { CONVENTIONS, QUIZ } from './bridge.conventions.js';
+
+// Opening threshold pref: 13 = book SAYC, 12 = David's home game.
+const OPEN_KEY = 'finesse.bridge.openmin';
+setOpenMin(localStorage.getItem(OPEN_KEY) === '12' ? 12 : 13);
+const saveOpenMin = n => { setOpenMin(n); localStorage.setItem(OPEN_KEY, String(getOpenMin())); };
 
 const toView = c => frenchView(c, () => false);
 const cardLabel = c => `${rankLabel(c[0])}${GLYPH[c[1]]}`;
@@ -76,8 +82,18 @@ const respondDrill = {
 };
 
 const conventionDrill = {
-  id: 'convention', title: 'Convention Check', hint: 'Stayman, transfers, Blackwood: answer correctly.', kind: 'choice',
+  id: 'convention', title: 'Convention Check', hint: 'Stayman, transfers, Blackwood, and the whole gadget book.', kind: 'choice',
   scene() {
+    // Half the reps come from the written quiz bank (all 11 conventions),
+    // half are dealt hands for the three conventions the bots play out.
+    if (Math.random() < 0.5) {
+      const q = QUIZ[Math.floor(Math.random() * QUIZ.length)];
+      return {
+        hand: [], kind: 'quiz', q,
+        prompt: html`<b>${q.conv}.</b> ${q.q}`,
+        choices: q.choices.map((c, i) => ({ id: String(i), label: c })),
+      };
+    }
     const kind = ['stayman', 'transfer', 'blackwood'][Math.floor(Math.random() * 3)];
     if (kind === 'blackwood') {
       const hand = deal()[0];
@@ -107,6 +123,15 @@ const conventionDrill = {
     return this.scene();
   },
   grade(scene, answer) {
+    if (scene.kind === 'quiz') {
+      const right = Number(answer) === scene.q.a;
+      return {
+        right,
+        title: right ? 'Correct.' : 'Convention missed.',
+        lead: `The answer: ${scene.q.choices[scene.q.a]}.`,
+        detail: [scene.q.why],
+      };
+    }
     const v = scene.kind === 'blackwood' ? blackwoodReply(scene.hand)
       : scene.kind === 'stayman' ? staymanReply(scene.hand)
       : transferReply(scene.t);
@@ -262,9 +287,130 @@ function Table({ onResult }) {
   </div>`;
 }
 
+// ---- bid the hand: full auctions, no play ----------------------------------
+// You bid South against three book bots, whole auction, every deal. At the end
+// all four hands flip up and a shadow auction (solid bots in your seat too)
+// shows where the system would have landed the same cards.
+function systemAuction(dealer, hands) {
+  const s = newAuction(dealer, hands);
+  let guard = 0;
+  while (s.phase === 'auction' && guard++ < 80) makeCall(s, s.turn, botCall(s, s.turn, 'solid'));
+  return s;
+}
+const auctionLineOf = a => a.calls.map((c, i) => `${NAMES[(a.dealer + i) % 4]} ${callLabel(c)}`).join(' · ');
+const contractLabel = a => (a.phase === 'passout' || !a.contract ? 'Passed out' : `${callLabel(a.contract.bid)} by ${NAMES[a.contract.declarer]}`);
+const sameLanding = (a, s) => {
+  if ((a.phase === 'passout') && (s.phase === 'passout')) return true;
+  if (!a.contract || !s.contract) return false;
+  return a.contract.bid === s.contract.bid && a.contract.declarer % 2 === s.contract.declarer % 2;
+};
+
+function Auction({ onResult }) {
+  const [, redraw] = useState(0);
+  const ref = useRef(null);
+  if (!ref.current) {
+    ref.current = { a: newAuction(0, deal()), dealer: 0, coach: getCoachPref(), matched: 0, hands: 0 };
+  }
+  const g = ref.current;
+  const a = g.a;
+  const bump = () => redraw(n => n + 1);
+  const over = a.phase !== 'auction';
+
+  if (over && !a.judged) {
+    a.judged = true;
+    a.sys = systemAuction(a.dealer, a.hands);
+    a.match = sameLanding(a, a.sys);
+    g.hands++; if (a.match) g.matched++;
+    onResult({ right: a.match });
+  }
+
+  useEffect(() => {
+    if (a.phase !== 'auction' || a.turn === 0) return;
+    const t = setTimeout(() => { makeCall(a, a.turn, botCall(a, a.turn, 'solid')); bump(); }, 420);
+    return () => clearTimeout(t);
+  });
+
+  const myCall = a.phase === 'auction' && a.turn === 0;
+  const next = () => {
+    g.dealer = (g.dealer + 1) % 4;
+    g.a = newAuction(g.dealer, deal());
+    bump();
+  };
+
+  return html`<div class="table">
+    <${TableRing} opps=${[1, 2, 3].map(seat => ({
+      name: NAMES[seat] + (seat === 2 ? ' ★' : ''),
+      cards: over ? 0 : 13,
+      turn: a.phase === 'auction' && a.turn === seat,
+    }))}>
+      <p class="callinfo">Bidding only: the play is imagined, the contract is graded. Bots bid the book.</p>
+      <p class="callinfo">${auctionLineOf(a) || (a.dealer === 0 ? 'You deal.' : `${NAMES[a.dealer]} deals.`)}${!over && a.turn !== 0 ? ` · ${NAMES[a.turn]} thinking…` : ''}</p>
+      ${over && html`<p class="callinfo"><b>${contractLabel(a)}</b></p>`}
+    <//>
+
+    ${over && html`<div class="verdict ${a.match ? 'good' : 'bad'}">
+      <b>${a.match ? 'You landed the system contract.' : 'The book went elsewhere.'}</b>
+      <span class="call">Your auction: ${auctionLineOf(a)} → ${contractLabel(a)}</span>
+      ${!a.match && html`<span class="call">Book auction: ${auctionLineOf(a.sys)} → ${contractLabel(a.sys)}</span>`}
+      <span class="call">Matched ${g.matched}/${g.hands} this session</span>
+      <button class="big" onClick=${next}>Next deal</button>
+    </div>`}
+    ${over && [2, 1, 3].map(seat => html`<div class="reveal">
+      <p class="callinfo">${NAMES[seat]}${seat === 2 ? ' (partner)' : ''} · ${hcp(a.hands[seat])} HCP</p>
+      <${Hand} cards=${a.hands[seat]} toView=${toView} />
+    </div>`)}
+
+    ${myCall && html`<div class="btnrow wrap">
+      ${['P', ...legalCalls(a).filter(isBid).slice(0, 14)].map(b =>
+        html`<button class="hint" onClick=${() => { makeCall(a, 0, b); bump(); }}>${callLabel(b)}</button>`)}
+    </div>`}
+    ${myCall && g.coach && (() => {
+      const adv = adviseCall(a, 0);
+      return html`<${CoachNote} text=${`System: ${callLabel(adv.call)}. ${adv.why}`} />`;
+    })()}
+
+    <div class="btnrow wrap controls-row">
+      <span class="scene">Openings:</span>
+      ${[13, 12].map(n => html`<button class="hint ${getOpenMin() === n ? 'on' : ''}"
+        onClick=${() => { saveOpenMin(n); bump(); }}>${n}+ ${n === 13 ? '(book)' : '(home game)'}</button>`)}
+      <button class="hint ${g.coach ? 'on' : ''}" onClick=${() => { g.coach = !g.coach; setCoachPref(g.coach); bump(); }}>coach ${g.coach ? 'on' : 'off'}</button>
+    </div>
+    <div class="me ${myCall ? 'turn' : ''}">
+      <span>You · Moss is your partner</span>
+      <span class="score">${hcp(a.hands[0])} HCP</span>
+    </div>
+    <${Hand} cards=${a.hands[0]} toView=${toView} />
+  </div>`;
+}
+
+// ---- conventions study ------------------------------------------------------
+function Conventions() {
+  const [, redraw] = useState(0);
+  return html`<div class="study">
+    <p class="tag">The SAYC gadget book: what each convention means, the full reply schedule, and the classic trap. Tap a name to open it, then drill it until the schedule is reflex.</p>
+    ${CONVENTIONS.map(cv => html`<details class="conv" key=${cv.id}>
+      <summary><b>${cv.name}</b> · ${cv.bid}</summary>
+      <p class="scene">${cv.when}</p>
+      <ul>${cv.schedule.map(s => html`<li>${s}</li>`)}</ul>
+      ${cv.trap && html`<p class="coachnote">⚠ ${cv.trap}</p>`}
+    </details>`)}
+    <a class="tile" href="#bridge/convention"><b>Drill it</b><span>Convention Check quizzes all of these, plus dealt hands for Stayman, transfers and Blackwood.</span></a>
+    <div class="btnrow wrap controls-row">
+      <span class="scene">Openings:</span>
+      ${[13, 12].map(n => html`<button class="hint ${getOpenMin() === n ? 'on' : ''}"
+        onClick=${() => { saveOpenMin(n); redraw(x => x + 1); }}>${n}+ ${n === 13 ? '(book SAYC)' : '(home game)'}</button>`)}
+    </div>
+    <p class="stats">Book SAYC opens on 13+ total points (Rule of 20 for shapely 11s). The 12+ setting is Standard American played light, modern 2/1 style: drills, bots and coach all follow it.</p>
+  </div>`;
+}
+
 export const game = {
   id: 'bridge', name: 'Bridge', glyph: '♠',
   tagline: 'SAYC bidding, conventions, leads, and full deals.',
   toView, study: STUDY, drills: [openDrill, respondDrill, conventionDrill, leadDrill], Table,
+  screens: {
+    auction: { title: 'Bid the Hand', hint: 'Full auctions, no play: land the system contract.', C: Auction },
+    conventions: { title: 'Conventions', hint: 'Study the gadgets: schedules, traps, and the drill.', C: Conventions },
+  },
   studyNote: 'Standard American Yellow Card. Table plays undoubled, non-vulnerable duplicate scoring.',
 };

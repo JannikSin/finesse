@@ -14,9 +14,16 @@ advanced strategy), and full play vs bots where built:
 - hearts — pass-three drill, table, study
 - ohhell — bid drill (dealer hook), table, study; scoring matches tally's exact10
 - rook — bid drill, study (Kentucky Discard, 120 deck like tally); table unbuilt
-- bridge — opening-bid, response, convention (Stayman/transfer/Blackwood), and
-  lead drills; full-auction table with dummy play; SAYC per the ACBL booklet
-Routes: `#<game>` menu, `#<game>/<drillId>`, `#<game>/table`, `#<game>/study`.
+- bridge — opening-bid, response, convention (dealt Stayman/transfer/Blackwood +
+  quiz bank over all 11 gadgets), and lead drills; full-auction table with dummy
+  play; Bid the Hand mode (`#bridge/auction`: full auctions vs book bots, no
+  play, graded against a shadow all-bot auction on the same cards); Conventions
+  reference screen (`#bridge/conventions`, data in `bridge.conventions.js`);
+  SAYC per the ACBL booklet, opening threshold toggle 13+ (book) / 12+ (David's
+  home game) via `setOpenMin`, pref `finesse.bridge.openmin`
+Routes: `#<game>` menu, `#<game>/<drillId>`, `#<game>/table`, `#<game>/study`,
+plus optional per-game `screens: { id: {title, hint, C} }` routed as
+`#<game>/<screenId>` (main.js records right/total via onResult).
 Study content is research-fed: 2+ named strategy sources per game, cited in the
 header comment of each study section / game file.
 
@@ -50,7 +57,7 @@ header comment of each study section / game file.
 - `tests/` — engine/games/bridge unit tests + `sim.test.mjs`: all-bot full-table
   simulations at every level (legality-checked every move) and seeded
   skill-ladder assertions (expert beats novice in all five playable games).
-  `npm test` (58 tests).
+  `npm test` (62 tests).
 
 ## Adding a game
 1. `<game>.engine.js` (pure) + `<game>.coach.js` (pure) + `<game>.js` (module).
@@ -68,6 +75,6 @@ header comment of each study section / game file.
 - Wergin book (archive.org, borrow-only) pending David's login.
 
 ## Verify
-- `npm test` (37 tests)
+- `npm test` (62 tests)
 - `npx serve` at repo root; hard-refresh twice for sw.js.
 - Icons: `node tools/make-icons.mjs`.
