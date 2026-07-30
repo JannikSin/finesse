@@ -1,6 +1,7 @@
 // Shared card widgets. Game modules map their card ids to a view via toView(c):
 // { label, glyph, tone: 'black'|'red'|'green'|'gold', ring: boolean }.
 import { html } from 'htm/preact';
+import { useState } from 'preact/hooks';
 
 export const GLYPH = { C: '♣', S: '♠', H: '♥', D: '♦' };
 export const SUIT_NAME = { C: 'clubs', S: 'spades', H: 'hearts', D: 'diamonds' };
@@ -47,11 +48,18 @@ export const setCoachPref = on => localStorage.setItem('finesse.coach', on ? 'on
 export const levelForSeat = (pref, seat, seed = 0) =>
   pref === 'mixed' ? ['novice', 'solid', 'expert'][(seat * 7 + seed) % 3] : pref;
 
+// Collapsed to a single gear by default so nothing sits over the table
+// (David's rule). Settings persist, so most sessions never open it.
 export function TableControls({ pref, coach, onLevel, onCoach }) {
-  return html`<div class="btnrow wrap controls">
-    <span class="scene">Bots:</span>
-    ${BOT_LEVELS.map(l => html`<button class="hint ${pref === l ? 'on' : ''}" onClick=${() => onLevel(l)}>${l}</button>`)}
-    <button class="hint ${coach ? 'on' : ''}" onClick=${() => onCoach(!coach)}>coach ${coach ? 'on' : 'off'}</button>
+  const [open, setOpen] = useState(false);
+  return html`<div class="controls">
+    ${open && html`<div class="btnrow wrap controls-row">
+      <span class="scene">Bots:</span>
+      ${BOT_LEVELS.map(l => html`<button class="hint ${pref === l ? 'on' : ''}" onClick=${() => onLevel(l)}>${l}</button>`)}
+      <button class="hint ${coach ? 'on' : ''}" onClick=${() => onCoach(!coach)}>coach ${coach ? 'on' : 'off'}</button>
+    </div>`}
+    <button class="hint gear" title="Table settings: bot strength and coach"
+      onClick=${() => setOpen(!open)}>${open ? '✕ close settings' : '⚙'}</button>
   </div>`;
 }
 

@@ -1,4 +1,4 @@
-const CACHE = 'finesse-v3';
+﻿const CACHE = 'finesse-v4';
 const PRECACHE = [
   './',
   './index.html',
@@ -51,3 +51,4 @@ self.addEventListener('fetch', e => {
     caches.match(e.request, { ignoreSearch: true }).then(hit => hit || fetch(e.request))
   );
 });
+

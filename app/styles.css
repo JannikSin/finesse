@@ -104,8 +104,11 @@ header h1 { font-size: 1.5rem; font-weight: 650; letter-spacing: 0.01em; flex: 1
 .btnrow.wrap .big { padding: 10px 18px; }
 button.big:disabled, button.hint:disabled { opacity: 0.4; cursor: default; }
 button.hint.on { border-color: var(--brass); color: var(--brass); font-weight: 700; }
-.controls { padding: 4px 0; }
+.controls { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding: 2px 0; }
 .controls .scene { font-size: 0.95rem; color: var(--chalk-dim); }
+.controls-row { justify-content: flex-end; }
+.controls .gear { margin-left: 0; padding: 6px 12px; min-height: 36px; opacity: 0.75; }
+.controls .gear:hover { opacity: 1; }
 .coachnote {
   background: rgba(229, 176, 74, 0.14); border: 1px solid rgba(229, 176, 74, 0.55);
   border-radius: 10px; padding: 10px 14px; margin: 8px 0; color: var(--chalk);
