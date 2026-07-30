@@ -64,3 +64,28 @@ export function TableControls({ pref, coach, onLevel, onCoach }) {
 }
 
 export const CoachNote = ({ text }) => (text ? html`<p class="coachnote">💡 ${text}</p>` : '');
+
+// ---- the table ring --------------------------------------------------------
+// Opponents arranged around the felt like a real table: 3 bots sit left, top,
+// right; 4 bots spread at equal angles (left, top-left, top-right, right);
+// 5 add a top-center seat. Each seat shows a face-down fan that depletes as
+// that player's hand does. opps: [{ name, badges, cards, turn, score }],
+// in clockwise order starting at the human's left.
+const RING_AREAS = {
+  1: ['top'],
+  2: ['left', 'right'],
+  3: ['left', 'top', 'right'],
+  4: ['left', 'tl', 'tr', 'right'],
+  5: ['left', 'tl', 'top', 'tr', 'right'],
+};
+
+export function TableRing({ opps, onFeltTap, children }) {
+  const areas = RING_AREAS[opps.length] || RING_AREAS[3];
+  return html`<div class="ring n${opps.length}">
+    ${opps.map((o, i) => html`<div class="seat seat-${areas[i]} ${o.turn ? 'turn' : ''}" key=${o.name}>
+      <span class="oppname">${o.name}${o.badges || ''}${o.score !== undefined ? html`<span class="score"> ${o.score}</span>` : ''}</span>
+      <div class="backs">${Array.from({ length: o.cards }, (_, k) => html`<span class="cardback" key=${k} />`)}</div>
+    </div>`)}
+    <div class="ringfelt" onClick=${onFeltTap || null}>${children}</div>
+  </div>`;
+}

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'preact/hooks';
 import {
   Card, Hand, SuitChip, GLYPH, rankLabel, frenchView,
   getLevelPref, setLevelPref, getCoachPref, setCoachPref, levelForSeat,
-  TableControls, CoachNote,
+  TableControls, CoachNote, TableRing,
 } from '../cards.js';
 import {
   deal, newHand, pass, pick, buryAndCall, callableSuits, legalMoves, currentTurn,
@@ -200,11 +200,12 @@ function Table({ onResult }) {
     (s.aceFlipped && seat === s.partner) ? html`<span class="badge alt">partner</span>` : null;
 
   return html`<div class="table">
-    <div class="opps">${[1, 2, 3, 4].map(seat => html`<div class="opp ${s.phase === 'play' && currentTurn(s) === seat ? 'turn' : ''}">
-      <span>${seatName(seat)}</span>${roleBadge(seat)}<span class="score">${g.scores[seat]}</span>
-    </div>`)}</div>
-
-    <div class="felt" onClick=${g.lastTrick ? () => { g.lastTrick = null; bump(); } : null}>
+    <${TableRing} onFeltTap=${g.lastTrick ? () => { g.lastTrick = null; bump(); } : null}
+      opps=${[1, 2, 3, 4].map(seat => ({
+        name: seatName(seat), badges: roleBadge(seat), score: g.scores[seat],
+        cards: s.hands[seat].length,
+        turn: (s.phase === 'play' && currentTurn(s) === seat && !g.lastTrick) || (s.phase === 'pick' && s.turn === seat),
+      }))}>
       ${s.calledSuit && html`<p class="callinfo">${seatName(s.picker)} picked · called ${SuitChip(s.calledSuit)}</p>`}
       ${s.alone && html`<p class="callinfo">${seatName(s.picker)} is going alone</p>`}
       ${g.note && s.trickNo === 0 && !s.calledSuit && html`<p class="callinfo">${g.note}</p>`}
@@ -215,7 +216,7 @@ function Table({ onResult }) {
       </div>
       ${g.lastTrick != null && html`<p class="callinfo">${seatName(g.lastTrick.winner)} takes the trick · tap here to continue</p>`}
       ${s.phase === 'pick' && html`<p class="callinfo">${seatName(s.turn)} deciding…</p>`}
-    </div>
+    <//>
 
     ${s.phase === 'done' && html`<div class="verdict ${s.result.win === (s.picker === 0 || s.partner === 0) ? 'good' : 'bad'}">
       <b>${s.result.win ? 'Picker side wins' : 'Defenders win'} ${s.result.pickerPts}–${s.result.defPts}${s.result.stake > 1 ? ' · ' + (s.result.stake === 2 ? 'schneider!' : 'no-tricker!') : ''}</b>

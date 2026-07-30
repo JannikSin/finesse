@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'preact/hooks';
 import {
   Card, Hand, SuitChip, GLYPH, rankLabel, frenchView,
   getLevelPref, setLevelPref, getCoachPref, setCoachPref, levelForSeat,
-  TableControls, CoachNote,
+  TableControls, CoachNote, TableRing,
 } from '../cards.js';
 import {
   newRound, forbiddenBid, submitBid, legalMoves, currentTurn, playCard, SEQ,
@@ -93,11 +93,13 @@ function Table({ onResult }) {
   const gameOver = s.phase === 'done' && g.roundNo === SEQ.length - 1;
 
   return html`<div class="table">
-    <div class="opps">${[1, 2, 3].map(seat => html`<div class="opp ${s.phase === 'play' && currentTurn(s) === seat ? 'turn' : ''}">
-      <span>${NAMES[seat]}</span>${s.bids[seat] !== null ? html`<span class="badge alt">${s.tricks[seat]}/${s.bids[seat]}</span>` : ''}<span class="score">${g.totals[seat]}</span>
-    </div>`)}</div>
-
-    <div class="felt" onClick=${g.showTrick ? () => { g.showTrick = null; bump(); } : null}>
+    <${TableRing} onFeltTap=${g.showTrick ? () => { g.showTrick = null; bump(); } : null}
+      opps=${[1, 2, 3].map(seat => ({
+        name: NAMES[seat], score: g.totals[seat],
+        badges: s.bids[seat] !== null ? html`<span class="badge alt">${s.tricks[seat]}/${s.bids[seat]}</span>` : '',
+        cards: s.hands[seat].length,
+        turn: (s.phase === 'play' && currentTurn(s) === seat && !g.showTrick) || (s.phase === 'bid' && s.turn === seat),
+      }))}>
       <p class="callinfo">Round ${g.roundNo + 1}/${SEQ.length}: ${s.n} card${s.n === 1 ? '' : 's'} · trump ${SuitChip(s.trump)}
         (turned <b>${rankLabel(s.trumpCard[0])}${GLYPH[s.trumpCard[1]]}</b>) · dealer ${NAMES[s.dealer]}</p>
       <div class="trick">
@@ -107,7 +109,7 @@ function Table({ onResult }) {
       </div>
       ${g.showTrick && html`<p class="callinfo">${NAMES[g.showTrick.winner]} takes it · tap here to continue</p>`}
       ${s.phase === 'bid' && !myBid && html`<p class="callinfo">${NAMES[s.turn]} bidding…</p>`}
-    </div>
+    <//>
 
     ${s.phase === 'done' && html`<div class="verdict ${s.result.pts[0] > 0 ? 'good' : 'bad'}">
       <b>${s.result.pts[0] > 0 ? `Made it: ${s.bids[0]} bid, +${s.result.pts[0]}.` : `Busted: bid ${s.bids[0]}, took ${s.tricks[0]}.`}</b>

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'preact/hooks';
 import {
   Card, Hand, GLYPH, rankLabel, frenchView,
   getLevelPref, setLevelPref, getCoachPref, setCoachPref, levelForSeat,
-  TableControls, CoachNote,
+  TableControls, CoachNote, TableRing,
 } from '../cards.js';
 import {
   deal, newHand, submitPass, startPlay, legalMoves, currentTurn, playCard,
@@ -92,11 +92,12 @@ function Table({ onResult }) {
   const over = Math.max(...g.scores) >= 100;
 
   return html`<div class="table">
-    <div class="opps">${[1, 2, 3].map(seat => html`<div class="opp ${s.phase === 'play' && currentTurn(s) === seat ? 'turn' : ''}">
-      <span>${NAMES[seat]}</span><span class="score">${g.scores[seat]}</span>
-    </div>`)}</div>
-
-    <div class="felt" onClick=${g.showTrick ? () => { g.showTrick = null; bump(); } : null}>
+    <${TableRing} onFeltTap=${g.showTrick ? () => { g.showTrick = null; bump(); } : null}
+      opps=${[1, 2, 3].map(seat => ({
+        name: NAMES[seat], score: g.scores[seat],
+        cards: s.hands[seat].length,
+        turn: s.phase === 'play' && currentTurn(s) === seat && !g.showTrick,
+      }))}>
       <p class="callinfo">Hand ${g.handNo + 1} · pass ${s.passDir} · hearts ${s.heartsBroken ? 'broken' : 'unbroken'} · lowest score wins, game ends over 100</p>
       <div class="trick">
         ${trick.cards.map((c, i) => html`<div class="played ${trick.winner === trick.seats[i] ? 'won' : ''}">
@@ -104,7 +105,7 @@ function Table({ onResult }) {
         </div>`)}
       </div>
       ${g.showTrick && html`<p class="callinfo">${NAMES[g.showTrick.winner]} takes it${g.showTrick.cards.some(isPoint) ? ', with points' : ''} · tap here to continue</p>`}
-    </div>
+    <//>
 
     ${s.phase === 'done' && html`<div class="verdict ${s.result.delta[0] === Math.min(...s.result.delta) ? 'good' : 'bad'}">
       <b>${s.result.shooter >= 0 ? `${NAMES[s.result.shooter]} shot the moon!` : `Hand over: ${s.result.delta.map((d, i) => `${NAMES[i]} +${d}`).join(' · ')}`}</b>

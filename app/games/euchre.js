@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'preact/hooks';
 import {
   Card, Hand, SuitChip, GLYPH, rankLabel,
   getLevelPref, setLevelPref, getCoachPref, setCoachPref, levelForSeat,
-  TableControls, CoachNote,
+  TableControls, CoachNote, TableRing,
 } from '../cards.js';
 import {
   deal, newHand, callRound1, callRound2, discard, legalMoves, currentTurn,
@@ -145,11 +145,15 @@ function Table({ onResult }) {
   const makerBadge = seat => seat === s.maker ? html`<span class="badge">${s.alone ? 'alone' : 'maker'}</span>` : null;
 
   return html`<div class="table">
-    <div class="opps">${[1, 2, 3].map(seat => html`<div class="opp ${s.phase === 'play' && currentTurn(s) === seat ? 'turn' : ''}">
-      <span>${NAMES[seat]}${seat === 2 ? ' ★' : ''}</span>${makerBadge(seat)}${s.sitout === seat ? html`<span class="badge alt">sits</span>` : ''}
-    </div>`)}</div>
-
-    <div class="felt" onClick=${g.showTrick ? () => { g.showTrick = null; bump(); } : null}>
+    <${TableRing} onFeltTap=${g.showTrick ? () => { g.showTrick = null; bump(); } : null}
+      opps=${[1, 2, 3].map(seat => ({
+        name: NAMES[seat] + (seat === 2 ? ' ★' : ''),
+        badges: html`${makerBadge(seat)}${s.sitout === seat ? html`<span class="badge alt">sits</span>` : ''}`,
+        cards: s.hands[seat].length,
+        turn: (s.phase === 'play' && currentTurn(s) === seat && !g.showTrick) ||
+          ((s.phase === 'call1' || s.phase === 'call2') && s.turn === seat) ||
+          (s.phase === 'discard' && s.dealer === seat),
+      }))}>
       <p class="callinfo">Us ${g.scores[0]} · Them ${g.scores[1]} · first to 10
         ${s.trump ? html` · trump ${SuitChip(s.trump)}` : ''}</p>
       ${(s.phase === 'call1' || s.phase === 'call2') && html`<p class="callinfo">
@@ -161,7 +165,7 @@ function Table({ onResult }) {
         </div>`)}
       </div>
       ${g.showTrick && html`<p class="callinfo">${NAMES[g.showTrick.winner]} takes it · tricks Us ${s.tricksWon[0]} Them ${s.tricksWon[1]} · tap here to continue</p>`}
-    </div>
+    <//>
 
     ${s.phase === 'done' && html`<div class="verdict ${s.result.delta[0] > 0 ? 'good' : 'bad'}">
       <b>${s.result.euchred ? `Euchred! Defenders +2` : s.result.march ? `March! Makers +${s.result.delta[s.result.makers]}` : `Makers take ${s.result.taken}, +1`}</b>

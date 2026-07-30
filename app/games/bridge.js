@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'preact/hooks';
 import {
   Card, Hand, GLYPH, rankLabel, frenchView,
   getLevelPref, setLevelPref, getCoachPref, setCoachPref, levelForSeat,
-  TableControls, CoachNote,
+  TableControls, CoachNote, TableRing,
 } from '../cards.js';
 import {
   deal, hcp, newAuction, legalCalls, makeCall, currentTurn,
@@ -203,13 +203,13 @@ function Table({ onResult }) {
   const dummySeat = a.contract ? a.dummy : null;
 
   return html`<div class="table">
-    <div class="opps">${[1, 2, 3].map(seat => html`<div class="opp ${seatToPlay === seat ? 'turn' : ''}">
-      <span>${NAMES[seat]}${seat === 2 ? ' ★' : ''}</span>
-      ${a.contract && a.contract.declarer === seat ? html`<span class="badge">declarer</span>` : ''}
-      ${a.contract && dummySeat === seat ? html`<span class="badge alt">dummy</span>` : ''}
-    </div>`)}</div>
-
-    <div class="felt" onClick=${g.showTrick ? () => { g.showTrick = null; bump(); } : null}>
+    <${TableRing} onFeltTap=${g.showTrick ? () => { g.showTrick = null; bump(); } : null}
+      opps=${[1, 2, 3].map(seat => ({
+        name: NAMES[seat] + (seat === 2 ? ' ★' : ''),
+        badges: html`${a.contract && a.contract.declarer === seat ? html`<span class="badge">declarer</span>` : ''}${a.contract && dummySeat === seat ? html`<span class="badge alt">dummy</span>` : ''}`,
+        cards: showDummy && dummySeat === seat ? 0 : a.hands[seat].length,
+        turn: (seatToPlay === seat && !g.showTrick) || (a.phase === 'auction' && a.turn === seat),
+      }))}>
       <p class="callinfo">We ${g.scores[0]} · They ${g.scores[1]}
         ${a.contract ? html` · contract <b>${callLabel(a.contract.bid)}</b> by ${NAMES[a.contract.declarer]} · tricks ${a.tricksDecl}/${6 + a.contract.level}` : ''}</p>
       ${a.phase === 'auction' && html`<p class="callinfo">${auctionLine || (a.dealer === 0 ? 'You deal.' : `${NAMES[a.dealer]} deals.`)}${a.turn !== 0 ? ` · ${NAMES[a.turn]} thinking…` : ''}</p>`}
@@ -225,7 +225,7 @@ function Table({ onResult }) {
         </div>`)}
       </div>
       ${g.showTrick && html`<p class="callinfo">${NAMES[g.showTrick.winner]} takes it · tap here to continue</p>`}
-    </div>
+    <//>
 
     ${a.phase === 'done' && html`<div class="verdict ${(a.result.score > 0) === (declSide === 0) ? 'good' : 'bad'}">
       <b>${callLabel(a.contract.bid)} by ${NAMES[a.contract.declarer]}: ${a.result.made ? `made ${a.result.tricksTaken - 6 - a.contract.level > 0 ? '+' + (a.result.tricksTaken - 6 - a.contract.level) : 'exactly'}` : `down ${6 + a.contract.level - a.result.tricksTaken}`} · ${a.result.score > 0 ? '+' : ''}${a.result.score}${a.result.game ? ' · GAME bonus' : ''}</b>
