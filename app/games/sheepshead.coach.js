@@ -76,7 +76,8 @@ export function suggestBury(hand8) {
     reasons.push('Short on fail: bury low trump rather than break your hold card.');
   }
   const pts = handPoints(bury);
-  reasons.push(`Bury ${bury.join(' + ')}: ${pts} points straight into your count${pts >= 14 ? ', a fat bury' : ''}.`);
+  const pretty = c => (c[0] === 'T' ? '10' : c[0]) + ({ C: '♣', S: '♠', H: '♥', D: '♦' }[c[1]]);
+  reasons.push(`Bury ${bury.map(pretty).join(' + ')}: ${pts} points straight into your count${pts >= 14 ? ', a fat bury' : ''}.`);
   const voided = FAIL_SUITS.filter(su => failsOf(hand8, su).length > 0 && failsOf(hand8, su).every(c => bury.includes(c)));
   if (voided.length) reasons.push('That voids a suit: you trump the first lead of it.');
   return { bury, calledSuit, reasons };

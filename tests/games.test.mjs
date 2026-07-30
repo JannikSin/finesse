@@ -7,7 +7,10 @@ import * as H from '../app/games/hearts.engine.js';
 import * as HC from '../app/games/hearts.coach.js';
 import * as O from '../app/games/ohhell.engine.js';
 import { estimateTricks, botBid, botPlay as ohBotPlay } from '../app/games/ohhell.coach.js';
-import { DECK as ROOK_DECK, pointsOf, deal as rookDeal, evalBid } from '../app/games/rook.logic.js';
+import {
+  DECK as ROOK_DECK, pointsOf, deal as rookDeal, evalBid,
+  sortRook, bestTrumpColor, evalNest, gradeNest, isTrumpRook,
+} from '../app/games/rook.logic.js';
 
 // ---- euchre ----------------------------------------------------------------
 test('euchre: deck and bowers', () => {
@@ -156,10 +159,11 @@ test('oh hell: estimate counts aces and trump honors', () => {
   assert.ok(bid >= 2, 'two aces at least');
 });
 
-// ---- rook ------------------------------------------------------------------
-test('rook: deck shape and counters match tally (120)', () => {
+// ---- rook (house rules: bird 25 and lowest, 125 in play, bids from 50) -----
+test('rook: house deck, bird worth one full color, 125 total', () => {
   assert.equal(ROOK_DECK.length, 41);
-  assert.equal(ROOK_DECK.reduce((n, c) => n + pointsOf(c), 0), 120);
+  assert.equal(pointsOf('BIRD'), 25);
+  assert.equal(ROOK_DECK.reduce((n, c) => n + pointsOf(c), 0), 125);
   const { hands, kitty } = rookDeal(Math.random);
   hands.forEach(h => assert.equal(h.length, 9));
   assert.equal(kitty.length, 5);
@@ -167,7 +171,28 @@ test('rook: deck shape and counters match tally (120)', () => {
 
 test('rook: bid bands are sane', () => {
   const monster = ['BIRD', 'R14', 'R13', 'R12', 'R11', 'R10', 'R9', 'G5', 'Y5'];
-  assert.ok(evalBid(monster).bid >= 105);
+  assert.ok(evalBid(monster).bid >= 100);
   const junk = ['R5', 'Y6', 'G7', 'B8', 'R9', 'Y7', 'G6', 'B6', 'Y8'];
   assert.equal(evalBid(junk).bid, 0);
+});
+
+test('rook: nest bury keeps every trump, builds voids, flags violations', () => {
+  for (let n = 0; n < 40; n++) {
+    const { hands, kitty } = rookDeal(Math.random);
+    const trump = bestTrumpColor(hands[0]);
+    const all14 = sortRook([...hands[0], ...kitty]);
+    const { bury } = evalNest(all14, trump);
+    assert.equal(bury.length, 5);
+    const nonTrump = all14.filter(c => !isTrumpRook(c, trump));
+    if (nonTrump.length >= 5) {
+      bury.forEach(c => assert.ok(!isTrumpRook(c, trump), 'book never buries trump when avoidable'));
+    }
+    // burying the bird must be flagged when avoidable
+    if (all14.includes('BIRD') && nonTrump.length >= 5) {
+      const bad = gradeNest(all14, trump, ['BIRD', ...nonTrump.slice(0, 4)]);
+      assert.ok(!bad.right && bad.violations.length > 0);
+    }
+    const good = gradeNest(all14, trump, bury);
+    assert.ok(good.right, 'book bury grades as right');
+  }
 });

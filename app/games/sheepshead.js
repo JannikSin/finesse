@@ -8,7 +8,7 @@ import {
 } from '../cards.js';
 import {
   deal, newHand, pass, pick, buryAndCall, callableSuits, legalMoves, currentTurn,
-  playCard, isTrump, sortHand, FAIL_SUITS,
+  playCard, isTrump, sortHand, handPoints, FAIL_SUITS,
 } from './sheepshead.engine.js';
 import {
   evalPick, suggestBury, gradeLeads, botPickDecision, botPlay, botBuryChoice,
@@ -40,6 +40,53 @@ const pickDrill = {
       title: right ? (ev.verdict === 'either' ? 'Defensible.' : 'Correct.') : 'Not this time.',
       lead: `Book says: ${ev.verdict === 'either' ? 'either way' : ev.verdict.toUpperCase()}.`,
       detail: ev.reasons,
+    };
+  },
+};
+
+const SUIT_WORD = { C: 'clubs', S: 'spades', H: 'hearts' };
+
+const buryDrill = {
+  id: 'bury', title: 'The Bury', hint: 'You picked up the blind. Two down, one suit to call.', kind: 'cards',
+  count: 2,
+  scene() {
+    for (let tries = 0; tries < 300; tries++) {
+      const d = deal();
+      if (evalPick(d.hands[0], 2).verdict === 'pass') continue;
+      const h8 = sortHand([...d.hands[0], ...d.blind]);
+      const sb = suggestBury(h8);
+      if (!sb.calledSuit) continue;
+      return {
+        hand: h8, book: sb,
+        prompt: html`You picked, and the blind is in your hand (8 cards). Tap <b>two</b> cards to bury. Buried points count toward your 61.`,
+      };
+    }
+    const d = deal();
+    const h8 = sortHand([...d.hands[0], ...d.blind]);
+    return { hand: h8, book: suggestBury(h8), prompt: 'You picked. Tap two cards to bury.' };
+  },
+  grade(scene, picks) {
+    const sb = scene.book;
+    const overlap = picks.filter(c => sb.bury.includes(c)).length;
+    const violations = [];
+    const failCount = scene.hand.filter(c => !isTrump(c)).length;
+    const pickedTrump = picks.filter(isTrump);
+    if (pickedTrump.length && failCount >= 3) {
+      violations.push(`Burying trump (${pickedTrump.map(c => rankLabel(c[0]) + GLYPH[c[1]]).join(', ')}) shortens the one suit that wins tricks. Bury fail.`);
+    }
+    if (sb.calledSuit && !callableSuits(scene.hand, picks).length) {
+      violations.push('That bury leaves you nothing to call: you would be forced to play alone.');
+    }
+    const pts = handPoints(picks), bookPts = handPoints(sb.bury);
+    if (!violations.length && pts < bookPts - 6) {
+      violations.push(`Only ${pts} points down when ${bookPts} were available. The bury is free money toward the 61.`);
+    }
+    const right = violations.length === 0 && (overlap === 2 || pts >= bookPts - 4);
+    return {
+      right,
+      title: right ? (overlap === 2 ? 'Textbook.' : 'A sound bury.') : 'The book buries differently.',
+      lead: `Book: bury ${sb.bury.map(c => rankLabel(c[0]) + GLYPH[c[1]]).join(' + ')}${sb.calledSuit ? `, call ${SUIT_WORD[sb.calledSuit]}` : ', go alone'}.`,
+      detail: [...violations, ...sb.reasons],
     };
   },
 };
@@ -214,6 +261,6 @@ function Table({ onResult }) {
 export const game = {
   id: 'sheepshead', name: 'Sheepshead', glyph: '🐑',
   tagline: 'The Wisconsin classic: pick, bury, call an ace.',
-  toView, study: STUDY, drills: [pickDrill, leadDrill], Table,
+  toView, study: STUDY, drills: [pickDrill, buryDrill, leadDrill], Table,
   studyNote: 'Distilled from pagat.com, sheepshead.org, playsheepshead.org, and the Wergin picking guidelines.',
 };
