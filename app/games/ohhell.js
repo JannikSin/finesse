@@ -81,7 +81,7 @@ function Table({ onResult }) {
       else if (s.phase === 'play' && currentTurn(s) !== 0) {
         playCard(s, currentTurn(s), botPlay(s, currentTurn(s), lvl(currentTurn(s)))); afterPlay(); bump();
       }
-    }, g.showTrick ? 1100 : 400);
+    }, g.showTrick ? 5000 : 400);
     return () => clearTimeout(t);
   });
 
@@ -97,7 +97,7 @@ function Table({ onResult }) {
       <span>${NAMES[seat]}</span>${s.bids[seat] !== null ? html`<span class="badge alt">${s.tricks[seat]}/${s.bids[seat]}</span>` : ''}<span class="score">${g.totals[seat]}</span>
     </div>`)}</div>
 
-    <div class="felt">
+    <div class="felt" onClick=${g.showTrick ? () => { g.showTrick = null; bump(); } : null}>
       <p class="callinfo">Round ${g.roundNo + 1}/${SEQ.length}: ${s.n} card${s.n === 1 ? '' : 's'} · trump ${SuitChip(s.trump)}
         (turned <b>${rankLabel(s.trumpCard[0])}${GLYPH[s.trumpCard[1]]}</b>) · dealer ${NAMES[s.dealer]}</p>
       <div class="trick">
@@ -105,7 +105,7 @@ function Table({ onResult }) {
           <span class="who">${NAMES[trick.seats[i]]}</span><${Card} c=${c} toView=${toView} small />
         </div>`)}
       </div>
-      ${g.showTrick && html`<p class="callinfo">${NAMES[g.showTrick.winner]} takes it</p>`}
+      ${g.showTrick && html`<p class="callinfo">${NAMES[g.showTrick.winner]} takes it · tap here to continue</p>`}
       ${s.phase === 'bid' && !myBid && html`<p class="callinfo">${NAMES[s.turn]} bidding…</p>`}
     </div>
 

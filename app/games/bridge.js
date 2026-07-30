@@ -188,7 +188,7 @@ function Table({ onResult }) {
         const humanTurn = seat === 0 ? !humanIsDummy : (seat === 2 && a.contract.declarer === 0);
         if (!humanTurn) { playCard(a, seat, botPlay(a, seat, lvl(seat))); afterPlay(); bump(); }
       }
-    }, g.showTrick ? 1100 : 420);
+    }, g.showTrick ? 5000 : 420);
     return () => clearTimeout(t);
   });
 
@@ -209,7 +209,7 @@ function Table({ onResult }) {
       ${a.contract && dummySeat === seat ? html`<span class="badge alt">dummy</span>` : ''}
     </div>`)}</div>
 
-    <div class="felt">
+    <div class="felt" onClick=${g.showTrick ? () => { g.showTrick = null; bump(); } : null}>
       <p class="callinfo">We ${g.scores[0]} · They ${g.scores[1]}
         ${a.contract ? html` · contract <b>${callLabel(a.contract.bid)}</b> by ${NAMES[a.contract.declarer]} · tricks ${a.tricksDecl}/${6 + a.contract.level}` : ''}</p>
       ${a.phase === 'auction' && html`<p class="callinfo">${auctionLine || (a.dealer === 0 ? 'You deal.' : `${NAMES[a.dealer]} deals.`)}${a.turn !== 0 ? ` · ${NAMES[a.turn]} thinking…` : ''}</p>`}
@@ -224,7 +224,7 @@ function Table({ onResult }) {
           <span class="who">${NAMES[trick.seats[i]]}</span><${Card} c=${c} toView=${toView} small />
         </div>`)}
       </div>
-      ${g.showTrick && html`<p class="callinfo">${NAMES[g.showTrick.winner]} takes it</p>`}
+      ${g.showTrick && html`<p class="callinfo">${NAMES[g.showTrick.winner]} takes it · tap here to continue</p>`}
     </div>
 
     ${a.phase === 'done' && html`<div class="verdict ${(a.result.score > 0) === (declSide === 0) ? 'good' : 'bad'}">

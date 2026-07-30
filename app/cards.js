@@ -23,10 +23,12 @@ export function Card({ c, toView, onClick, dim, sel, small }) {
   </button>`;
 }
 
+// No visual tell on which cards are legal: every card looks the same, but a
+// tap on an illegal card silently does nothing (David's rule).
 export const Hand = ({ cards, toView, onPlay, legal, selected }) => html`<div class="hand">
   ${cards.map(c => html`<${Card} key=${c} c=${c} toView=${toView}
-    onClick=${onPlay && (!legal || legal.includes(c)) ? () => onPlay(c) : null}
-    dim=${legal && !legal.includes(c)} sel=${selected && selected.includes(c)} />`)}
+    onClick=${onPlay ? () => { if (!legal || legal.includes(c)) onPlay(c); } : null}
+    sel=${selected && selected.includes(c)} />`)}
 </div>`;
 
 export const SuitChip = su => html`<span class="chip suit-${su}">${GLYPH[su]} ${SUIT_NAME[su]}</span>`;

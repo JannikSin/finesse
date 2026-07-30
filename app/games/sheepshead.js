@@ -123,7 +123,7 @@ function Table({ onResult }) {
       } else if (s.phase === 'play' && currentTurn(s) !== 0) {
         stepPlay(botPlay(s, currentTurn(s), lvl(currentTurn(s))), currentTurn(s)); bump();
       }
-    }, g.lastTrick ? 1300 : s.phase === 'play' ? 500 : 350);
+    }, g.lastTrick ? 5000 : s.phase === 'play' ? 500 : 350);
     return () => clearTimeout(t);
   });
 
@@ -157,7 +157,7 @@ function Table({ onResult }) {
       <span>${seatName(seat)}</span>${roleBadge(seat)}<span class="score">${g.scores[seat]}</span>
     </div>`)}</div>
 
-    <div class="felt">
+    <div class="felt" onClick=${g.lastTrick ? () => { g.lastTrick = null; bump(); } : null}>
       ${s.calledSuit && html`<p class="callinfo">${seatName(s.picker)} picked · called ${SuitChip(s.calledSuit)}</p>`}
       ${s.alone && html`<p class="callinfo">${seatName(s.picker)} is going alone</p>`}
       ${g.note && s.trickNo === 0 && !s.calledSuit && html`<p class="callinfo">${g.note}</p>`}
@@ -166,7 +166,7 @@ function Table({ onResult }) {
           <span class="who">${seatName(trick.seats[i])}</span><${Card} c=${c} toView=${toView} small />
         </div>`)}
       </div>
-      ${g.lastTrick != null && html`<p class="callinfo">${seatName(g.lastTrick.winner)} takes the trick</p>`}
+      ${g.lastTrick != null && html`<p class="callinfo">${seatName(g.lastTrick.winner)} takes the trick · tap here to continue</p>`}
       ${s.phase === 'pick' && html`<p class="callinfo">${seatName(s.turn)} deciding…</p>`}
     </div>
 
@@ -182,7 +182,7 @@ function Table({ onResult }) {
     </div>`}
     ${myTurnPick && g.coach && (() => {
       const ev = evalPick(human, (5 - (s.dealer + 1) % 5) % 5);
-      return html`<${CoachNote} text=${`Book says ${ev.verdict === 'either' ? 'either way' : ev.verdict.toUpperCase()}: ${ev.reasons[ev.reasons.length - 1]}`} />`;
+      return html`<${CoachNote} text=${`Book says ${ev.verdict === 'either' ? 'either way' : ev.verdict.toUpperCase()}. ${ev.reasons[0]} ${ev.reasons[1] || ''}`} />`;
     })()}
 
     ${myBury && html`<p class="scene">Tap two cards to bury${g.buriedSel.length === 2 ? ', then call a suit' : ''}.

@@ -101,16 +101,21 @@ export function noviceBury(hand8) {
 // ---- lead grading ----------------------------------------------------------
 const TIERS = ['best', 'good', 'okay', 'bad', 'terrible'];
 
+// Every reason is checked against the actual hand: no advice ever references
+// a card or suit the player does not hold.
 export function gradeLeads(hand, role, calledSuit) {
   const g = {};
   const hasTrump = trumps(hand).length > 0;
+  const hasCalled = calledSuit ? failsOf(hand, calledSuit).length > 0 : false;
   for (const c of hand) {
     if (role === 'picker') {
       if (c === 'QC' || c === 'QS') g[c] = ['best', 'High queen: certain trick, pulls two rounds of trump value.'];
       else if (c[0] === 'Q' || c[0] === 'J') g[c] = ['good', 'Trump lead: right idea. Highest first keeps you in control.'];
       else if (isTrump(c)) g[c] = ['good', 'Trump lead is correct, though leading low trump can gift a cheap trick.'];
+      else if (!hasTrump && c[0] === 'A') g[c] = ['good', 'No trump left to lead: cash the ace while it lives.'];
+      else if (!hasTrump) g[c] = ['okay', 'No trump left to lead: keep it small and lose cheap.'];
       else if (calledSuit && c[1] === calledSuit) g[c] = ['okay', 'Flushing the called ace is a real tactic, but usually save it until trump is drawn.'];
-      else g[c] = ['bad', 'Picker leads trump. A fail lead hands tempo to the defense.'];
+      else g[c] = ['bad', 'You hold trump: the picker leads it. A fail lead hands tempo to the defense.'];
     } else if (role === 'partner') {
       if (c === ('A' + calledSuit)) g[c] = ['terrible', 'Never lead the called ace: it announces you and wastes its walk.'];
       else if (isTrump(c)) g[c] = [c === 'QC' ? 'best' : 'good', 'Partner leads trump for the picker. Queen of clubs first is textbook.'];
@@ -118,10 +123,19 @@ export function gradeLeads(hand, role, calledSuit) {
       else if (!hasTrump) g[c] = ['okay', 'No trump: lead your short suit and hunt a trumping chance.'];
       else g[c] = ['bad', 'You hold trump: lead it. Fail leads help the defense.'];
     } else { // defender
-      if (calledSuit && c[1] === calledSuit && !isTrump(c)) g[c] = ['best', 'Lead the called suit: forces the ace out early and finds your partners.'];
-      else if (!isTrump(c) && failsOf(hand, c[1]).length >= 3) g[c] = ['good', 'Long suit through the picker: someone behind you may trump in.'];
-      else if (!isTrump(c) && c[0] === 'A') g[c] = ['okay', 'A fail ace can cash, but the called suit lead comes first.'];
-      else if (!isTrump(c)) g[c] = ['okay', 'A neutral fail lead. Called suit or long suit is sharper.'];
+      if (hasCalled && c[1] === calledSuit && !isTrump(c)) g[c] = ['best', 'Lead the called suit: forces the ace out early and finds your partners.'];
+      else if (!isTrump(c) && failsOf(hand, c[1]).length >= 3) {
+        g[c] = [hasCalled ? 'good' : 'best',
+          hasCalled ? 'Long suit through the picker: someone behind you may trump in.'
+            : 'No called-suit card in your hand, so the long suit through the picker is the book lead.'];
+      } else if (!isTrump(c) && c[0] === 'A') {
+        g[c] = [hasCalled ? 'okay' : 'good',
+          hasCalled ? 'A fail ace can cash, but the called-suit lead comes first.'
+            : 'No called-suit card to lead: cash the fail ace before it gets trumped.'];
+      } else if (!isTrump(c)) {
+        g[c] = ['okay', hasCalled ? 'A neutral fail lead. The called suit or a long suit is sharper.'
+          : 'A neutral fail lead. A longer suit or an ace works harder.'];
+      } else if (hand.every(isTrump)) g[c] = ['okay', 'Nothing but trump in hand: lead your smallest and keep the queens home.'];
       else g[c] = ['bad', 'Defenders do not lead trump into the picker: that does the picker\'s work.'];
     }
   }
