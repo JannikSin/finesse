@@ -195,8 +195,8 @@ test('oh hell skill ladder: expert outscores novices', () => {
 });
 
 // ---- bridge ----------------------------------------------------------------
-function bridgeDeal(levels, dealer, rng) {
-  const a = B.newAuction(dealer, B.deal(rng));
+function bridgeDeal(levels, dealer, rng, board = 0) {
+  const a = B.newAuction(dealer, B.deal(rng), B.vulForBoard(board));
   let guard = 0;
   while (a.phase === 'auction' && guard++ < 50) B.makeCall(a, a.turn, BB.botCall(a, a.turn, levels[a.turn]));
   assert.ok(a.phase !== 'auction', 'auction terminates');
@@ -216,20 +216,24 @@ for (const level of ['novice', 'solid', 'expert']) {
     const rng = mulberry32(23);
     let played = 0;
     for (let n = 0; n < 60; n++) {
-      if (bridgeDeal(Array(4).fill(level), n % 4, rng) !== null) played++;
+      if (bridgeDeal(Array(4).fill(level), n % 4, rng, n) !== null) played++;
     }
     assert.ok(played > 10, `${level} table reaches contracts (${played}/60)`);
   });
 }
 
-test('bridge skill ladder: SAYC pair beats novice pair', () => {
-  const rng = mulberry32(31);
-  const levels = ['solid', 'novice', 'solid', 'novice']; // NS system bidders
-  let ns = 0, deals = 0;
-  for (let n = 0; n < 200; n++) {
-    const r = bridgeDeal(levels, n % 4, rng);
-    if (r !== null) { ns += r; deals++; }
-  }
-  assert.ok(deals > 50, 'enough contracts reached');
-  assert.ok(ns > 0, `NS (system) should net positive over ${deals} deals, got ${ns}`);
-});
+// Doubles are variance amplifiers: the ladder must hold across seeds, not on
+// one lucky one. Three seeds, each must land positive on its own.
+for (const seed of [31, 77, 123]) {
+  test(`bridge skill ladder: SAYC pair beats novice pair (seed ${seed})`, () => {
+    const rng = mulberry32(seed);
+    const levels = ['solid', 'novice', 'solid', 'novice']; // NS system bidders
+    let ns = 0, deals = 0;
+    for (let n = 0; n < 200; n++) {
+      const r = bridgeDeal(levels, n % 4, rng, n);
+      if (r !== null) { ns += r; deals++; }
+    }
+    assert.ok(deals > 50, 'enough contracts reached');
+    assert.ok(ns > 0, `NS (system) should net positive over ${deals} deals, got ${ns}`);
+  });
+}

@@ -1,4 +1,4 @@
-﻿const CACHE = 'finesse-v7';
+﻿const CACHE = 'finesse-v8';
 const PRECACHE = [
   './',
   './index.html',

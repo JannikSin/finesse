@@ -276,6 +276,9 @@ details.conv .btnrow { align-items: center; gap: 12px; }
 .stripchip.ask { background: var(--brass); border-color: var(--brass); box-shadow: 0 0 10px rgba(234, 183, 84, 0.45); }
 .stripchip.ask i { color: #4c3a10; }
 
+/* Pass/Dbl/Rdbl stand apart from the bid ladder */
+.btnrow .callword { border-color: var(--brass); color: var(--brass); font-weight: 700; }
+
 /* bid-the-hand reveal */
 .reveal { margin-top: 10px; }
 .reveal .callinfo { text-align: left; padding: 2px 0; }

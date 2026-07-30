@@ -89,7 +89,8 @@ test('bridge: full deals with bots complete and score', () => {
     assert.equal(a.tricksDecl >= 0 && a.tricksDecl <= 13, true);
     const need = 6 + a.contract.level;
     if (a.tricksDecl >= need) assert.ok(a.result.score > 0);
-    else assert.equal(a.result.score, -50 * (need - a.tricksDecl));
+    else if (!a.contract.dbl) assert.equal(a.result.score, -50 * (need - a.tricksDecl));
+    else assert.ok(a.result.score < 0, 'doubled set is negative');
   }
   assert.ok(played > 10, 'bots actually reach contracts');
 });
@@ -191,4 +192,128 @@ test('bridge: practice generators produce valid graded scenes', async () => {
     const p = B.hcp(h);
     assert.ok(p >= 15 && p <= 17, 'hcp in window, got ' + p);
   }
+});
+
+// ---- doubles, redoubles, vulnerability (the Elon criteria) -----------------
+
+test('bridge: X/XX legality matrix', () => {
+  const a = B.newAuction(0, B.deal(Math.random));
+  assert.ok(!B.legalCalls(a).includes('X'), 'no double before any bid');
+  B.makeCall(a, 0, '1S');
+  assert.ok(B.legalCalls(a).includes('X'), 'opponent may double a bid');
+  assert.ok(!B.legalCalls(a).includes('XX'), 'no redouble before a double');
+  B.makeCall(a, 1, 'X');
+  assert.ok(!B.legalCalls(a).includes('X'), 'no double of a double');
+  assert.ok(B.legalCalls(a).includes('XX'), 'doubled side may redouble');
+  B.makeCall(a, 2, 'XX');
+  assert.ok(!B.legalCalls(a).includes('X'), 'no double of a redouble');
+  assert.ok(!B.legalCalls(a).includes('XX'), 'no re-redouble');
+  B.makeCall(a, 3, '2H'); // new bid wipes the double state
+  assert.ok(B.legalCalls(a).includes('X'), 'fresh bid may be doubled');
+  // partner of the bidder cannot double own side
+  B.makeCall(a, 0, 'P');
+  assert.ok(!B.legalCalls(a).includes('X') || (1 % 2 !== 3 % 2), 'sides checked');
+  const b = B.newAuction(0, B.deal(Math.random));
+  B.makeCall(b, 0, '1S');
+  B.makeCall(b, 1, 'P');
+  assert.ok(!B.legalCalls(b).includes('X'), 'partner cannot double own side bid');
+});
+
+test('bridge: doubled auction ends into a doubled contract and plays out', () => {
+  const a = B.newAuction(0, B.deal(Math.random));
+  B.makeCall(a, 0, '1S');
+  B.makeCall(a, 1, 'X');
+  B.makeCall(a, 2, 'P');
+  B.makeCall(a, 3, 'P');
+  B.makeCall(a, 0, 'P');
+  assert.equal(a.phase, 'play');
+  assert.equal(a.contract.bid, '1S');
+  assert.equal(a.contract.dbl, 1);
+  assert.equal(a.contract.declarer, 0);
+  while (a.phase === 'play') {
+    const seat = B.currentTurn(a);
+    B.playCard(a, seat, botPlay(a, seat, 'solid'));
+  }
+  assert.equal(a.phase, 'done');
+  assert.ok(Number.isFinite(a.result.score), 'doubled contract scores');
+});
+
+test('bridge: full duplicate scoring table (doubled/redoubled/vul)', () => {
+  const s = (lvl, st, dbl, vul, taken) => B.scoreContract({ level: lvl, strain: st, dbl, vul }, taken).score;
+  // undoubled vulnerability
+  assert.equal(s(3, 'N', 0, false, 7), -100); // down 2 NV
+  assert.equal(s(3, 'N', 0, true, 7), -200);  // down 2 vul: 100 each
+  assert.equal(s(3, 'N', 0, true, 9), 100 + 500); // vul game bonus 500
+  // doubled making
+  assert.equal(s(2, 'S', 1, false, 8), 120 + 300 + 50); // 2S doubled = game, NV: 470
+  assert.equal(s(2, 'S', 1, true, 8), 120 + 500 + 50);  // vul: 670
+  assert.equal(s(2, 'S', 1, false, 9), 470 + 100); // doubled overtrick NV 100
+  assert.equal(s(2, 'S', 1, true, 9), 670 + 200);  // doubled overtrick vul 200
+  // doubled down ladders
+  assert.equal(s(4, 'S', 1, false, 7), -(100 + 200 + 200)); // X NV down 3 = -500
+  assert.equal(s(4, 'S', 1, false, 5), -(100 + 200 + 200 + 300 + 300)); // down 5 = -1100
+  assert.equal(s(4, 'S', 1, true, 7), -(200 + 300 + 300)); // X vul down 3 = -800
+  // redoubled
+  assert.equal(s(2, 'S', 2, false, 6), -2 * (100 + 200)); // XX NV down 2 = -600
+  assert.equal(s(1, 'N', 2, false, 7), 160 + 300 + 100); // 1NT XX made NV = 560: game on the redoubled value + 100 insult
+  // slam bonuses by vulnerability
+  assert.equal(s(6, 'H', 0, true, 12), 180 + 500 + 750);
+  assert.equal(s(7, 'N', 0, true, 13), 220 + 500 + 1500);
+});
+
+test('bridge: fuzz 2000 all-bot auctions terminate sane at every level and vul', () => {
+  let x = 9001;
+  const rng = () => {
+    x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
+    return ((x >>> 0) / 4294967296);
+  };
+  const levels = ['novice', 'solid', 'expert'];
+  let doubles = 0;
+  for (let n = 0; n < 2000; n++) {
+    const a = B.newAuction(n % 4, B.deal(rng), B.vulForBoard(n));
+    let guard = 0;
+    while (a.phase === 'auction' && guard++ < 60) {
+      B.makeCall(a, a.turn, botCall(a, a.turn, levels[n % 3]));
+    }
+    assert.ok(a.phase === 'play' || a.phase === 'passout', `auction ${n} terminates`);
+    if (a.contract) {
+      assert.ok(Number.isFinite(a.contract.level) && a.contract.level >= 1 && a.contract.level <= 7, `sane level, deal ${n}`);
+      assert.ok(B.STRAINS.includes(a.contract.strain), `sane strain, deal ${n}`);
+      assert.ok([0, 1, 2].includes(a.contract.dbl), `sane dbl, deal ${n}`);
+      if (a.contract.dbl > 0) doubles++;
+    }
+    if (a.calls.includes('X')) assert.ok(a.calls.some(B.isBid), 'X never without a bid');
+  }
+  assert.ok(doubles > 5, `bot doubles actually occur (${doubles} doubled contracts in 2000)`);
+});
+
+test('bridge: takeout double fires and gets advanced', () => {
+  // classic shape over RHO 1H: 4-1-4-4, 13 HCP -> X
+  const doubler = ['AS', 'KS', '3S', '2S', '7H', 'KD', 'QD', '4D', '3D', 'AC', '5C', '4C', '3C'];
+  const a = B.newAuction(3, [[], [], [], []]);
+  a.hands[3] = ['AH', 'KH', 'QH', 'JH', 'TH', '2H', 'AD', 'KD', '2D', '2C', '3C', '4C', '5C'];
+  B.makeCall(a, 3, botCall(a, 3, 'solid') === '1H' ? '1H' : '1H');
+  a.hands[0] = doubler;
+  assert.equal(botCall(a, 0, 'solid'), 'X');
+  // advancer with nothing must still bid
+  B.makeCall(a, 0, 'X');
+  B.makeCall(a, 1, 'P');
+  a.hands[2] = ['5S', '4S', '3S', '2S', '9H', '8H', '7D', '6D', '5D', '4D', '5C', '3C', '2C'];
+  const adv = botCall(a, 2, 'solid');
+  assert.ok(adv !== 'P', `advancer must bid, got ${adv}`);
+});
+
+test('bridge: vulnerability rotation breaks the dealer lockstep', () => {
+  // dealer is board % 4; vul must NOT be welded to it
+  assert.equal(B.vulForBoard(0), 'none');
+  assert.equal(B.vulForBoard(4), 'ns'); // dealer 0 again, different vul
+  assert.equal(B.vulForBoard(8), 'ew');
+  assert.equal(B.vulForBoard(12), 'both');
+  // every dealer sees every vulnerability across 16 boards
+  const seen = {};
+  for (let n = 0; n < 16; n++) {
+    const d = n % 4;
+    (seen[d] = seen[d] || new Set()).add(B.vulForBoard(n));
+  }
+  for (let d = 0; d < 4; d++) assert.equal(seen[d].size, 4, `dealer ${d} sees all four vuls`);
 });

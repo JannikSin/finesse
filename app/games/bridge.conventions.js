@@ -201,12 +201,14 @@ export const CONVENTIONS = [
       { big: '≤2', small: 'cards in their suit' },
       { big: '3+', small: 'in each unbid suit' },
     ],
-    when: 'An opponent opens, you hold opening values, shortness in their suit, and support for the three unbid suits. The double says "pick a suit, partner". (Not yet in the bots\' auctions here.)',
+    when: 'An opponent opens, you hold opening values, shortness in their suit, and support for the three unbid suits. The double says "pick a suit, partner". The bots play it, and the tables score doubled contracts in full.',
     schedule: [
       'Partner MUST bid their best suit, even with zero points: passing converts it to penalty.',
-      'Partner jumps a level with 10-12; cue-bids their suit with game interest.',
+      'Partner jumps a level with 10-12; 1NT with 8-11 and their suit stopped.',
       'Doubler bidding a new suit afterwards shows 17+, too strong for a simple overcall.',
       'Double is for takeout when partner has not bid and the doubler acts at their first turn over a suit bid.',
+      'The price of being wrong: doubled contracts score double trick values plus a 50 insult; doubled undertricks climb 100/300/500 (200/500/800 vulnerable), and a redouble doubles it all again.',
+      'House bot habit: the bots here treat EVERY double as takeout, so a partner bot will run from your low-level penalty double. Penalty doubles are safe only when no cheap suit is left to run to.',
     ],
     trap: 'Doubling with a flat hand and length in their suit: that is a penalty pass shape, not takeout. And never pass partner\'s takeout double for lack of points.',
     quiz: [

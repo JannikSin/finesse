@@ -62,7 +62,7 @@ header comment of each study section / game file.
 - `tests/` — engine/games/bridge unit tests + `sim.test.mjs`: all-bot full-table
   simulations at every level (legality-checked every move) and seeded
   skill-ladder assertions (expert beats novice in all five playable games).
-  `npm test` (63 tests).
+  `npm test` (70 tests).
 
 ## Adding a game
 1. `<game>.engine.js` (pure) + `<game>.coach.js` (pure) + `<game>.js` (module).
@@ -74,12 +74,15 @@ header comment of each study section / game file.
 ## Known ceilings (ponytail comments in code)
 - Sheepshead: all-pass re-deals (no leaster); bots know true teams pre-ace-flip.
 - Rook: no table (auction + kitty + discard loop unbuilt).
-- Bridge: no doubles/redoubles, non-vulnerable scoring only, one-round rebid
-  depth in bot auctions, no negative/takeout doubles. Growth path: doubles →
-  vulnerability rotation → deeper rebids → 2/1 as a system toggle.
+- Bridge: engine has doubles/redoubles + full duplicate scoring (doubled,
+  redoubled, vulnerability rotation with dealer); bots make takeout doubles,
+  advance them, and 1NT-overcall, with two-round rebids (opener + responder).
+  Remaining ceilings: no negative doubles, bots read every double as takeout
+  and never redouble or double for penalty, no weak-two 2NT feature ask, no
+  2/1 system toggle.
 - Wergin book (archive.org, borrow-only) pending David's login.
 
 ## Verify
-- `npm test` (63 tests)
+- `npm test` (70 tests)
 - `npx serve` at repo root; hard-refresh twice for sw.js.
 - Icons: `node tools/make-icons.mjs`.

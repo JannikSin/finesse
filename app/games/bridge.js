@@ -9,7 +9,7 @@ import {
 } from '../cards.js';
 import {
   deal, hcp, newAuction, legalCalls, makeCall, currentTurn,
-  legalMoves, playCard, isBid, bidRank,
+  legalMoves, playCard, isBid, bidRank, vulForBoard,
 } from './bridge.engine.js';
 import {
   openingBid, responseTo, staymanReply, transferReply, blackwoodReply,
@@ -27,6 +27,16 @@ const saveOpenMin = n => { setOpenMin(n); localStorage.setItem(OPEN_KEY, String(
 
 const toView = c => frenchView(c, () => false);
 const cardLabel = c => `${rankLabel(c[0])}${GLYPH[c[1]]}`;
+const contractStr = c => `${callLabel(c.bid)}${c.dbl === 2 ? ' ××' : c.dbl === 1 ? ' ×' : ''}`;
+const vulStr = v => (v === 'none' ? 'nobody vul' : v === 'both' ? 'both vul' : v === 'ns' ? 'we are vul' : 'they are vul');
+// Pass/Double/Redouble first, then every legal bid: the full bidding box.
+const CallButtons = ({ a, onCall }) => {
+  const lc = legalCalls(a);
+  return html`<div class="btnrow wrap">
+    ${[...lc.filter(c => !isBid(c)), ...lc.filter(isBid)].map(b =>
+      html`<button class="hint ${!isBid(b) ? 'callword' : ''}" onClick=${() => onCall(b)}>${b === 'X' ? 'Dbl' : b === 'XX' ? 'Rdbl' : callLabel(b)}</button>`)}
+  </div>`;
+};
 
 const BID_CHOICES = ['P', '1C', '1D', '1H', '1S', '1N', '2C', '2D', '2H', '2S', '2N', '3C', '3D', '3H', '3S', '3N', '4H', '4S'];
 const choicesFrom = (over) => BID_CHOICES
@@ -180,7 +190,7 @@ function Table({ onResult }) {
   const ref = useRef(null);
   if (!ref.current) {
     ref.current = {
-      a: newAuction(0, deal()), dealer: 0, scores: [0, 0], showTrick: null,
+      a: newAuction(0, deal(), vulForBoard(0)), dealer: 0, board: 0, scores: [0, 0], showTrick: null,
       pref: getLevelPref(), coach: getCoachPref(), seed: 0,
     };
   }
@@ -209,7 +219,10 @@ function Table({ onResult }) {
     const t = setTimeout(() => {
       if (g.showTrick) { g.showTrick = null; bump(); return; }
       if (a.phase === 'auction' && a.turn !== 0) { makeCall(a, a.turn, botCall(a, a.turn, lvl(a.turn))); bump(); }
-      else if (a.phase === 'passout') { g.a = newAuction((g.dealer + 1) % 4, deal()); g.dealer = (g.dealer + 1) % 4; bump(); }
+      else if (a.phase === 'passout') {
+        g.dealer = (g.dealer + 1) % 4; g.board++;
+        g.a = newAuction(g.dealer, deal(), vulForBoard(g.board)); bump();
+      }
       else if (a.phase === 'play') {
         const seat = currentTurn(a);
         const humanTurn = seat === 0 ? !humanIsDummy : (seat === 2 && a.contract.declarer === 0);
@@ -237,8 +250,8 @@ function Table({ onResult }) {
         cards: showDummy && dummySeat === seat ? 0 : a.hands[seat].length,
         turn: (seatToPlay === seat && !g.showTrick) || (a.phase === 'auction' && a.turn === seat),
       }))}>
-      <p class="callinfo">We ${g.scores[0]} · They ${g.scores[1]}
-        ${a.contract ? html` · contract <b>${callLabel(a.contract.bid)}</b> by ${NAMES[a.contract.declarer]} · tricks ${a.tricksDecl}/${6 + a.contract.level}` : ''}</p>
+      <p class="callinfo">We ${g.scores[0]} · They ${g.scores[1]} · ${vulStr(a.vul)}
+        ${a.contract ? html` · contract <b>${contractStr(a.contract)}</b> by ${NAMES[a.contract.declarer]} · tricks ${a.tricksDecl}/${6 + a.contract.level}` : ''}</p>
       ${a.phase === 'auction' && html`<p class="callinfo">${auctionLine || (a.dealer === 0 ? 'You deal.' : `${NAMES[a.dealer]} deals.`)}${a.turn !== 0 ? ` · ${NAMES[a.turn]} thinking…` : ''}</p>`}
       ${showDummy && dummySeat !== 0 && html`<div>
         <p class="callinfo">${NAMES[dummySeat]}'s dummy${a.contract.declarer === 0 ? ' (you play these too)' : ''}</p>
@@ -255,18 +268,15 @@ function Table({ onResult }) {
     <//>
 
     ${a.phase === 'done' && html`<div class="verdict ${(a.result.score > 0) === (declSide === 0) ? 'good' : 'bad'}">
-      <b>${callLabel(a.contract.bid)} by ${NAMES[a.contract.declarer]}: ${a.result.made ? `made ${a.result.tricksTaken - 6 - a.contract.level > 0 ? '+' + (a.result.tricksTaken - 6 - a.contract.level) : 'exactly'}` : `down ${6 + a.contract.level - a.result.tricksTaken}`} · ${a.result.score > 0 ? '+' : ''}${a.result.score}${a.result.game ? ' · GAME bonus' : ''}</b>
+      <b>${contractStr(a.contract)} by ${NAMES[a.contract.declarer]}: ${a.result.made ? `made ${a.result.tricksTaken - 6 - a.contract.level > 0 ? '+' + (a.result.tricksTaken - 6 - a.contract.level) : 'exactly'}` : `down ${6 + a.contract.level - a.result.tricksTaken}`} · ${a.result.score > 0 ? '+' : ''}${a.result.score}${a.result.game ? ' · GAME bonus' : ''}${a.contract.vul ? ' · vul' : ''}</b>
       <span class="call">We ${g.scores[0]} · They ${g.scores[1]}</span>
       <button class="big" onClick=${() => {
-        g.dealer = (g.dealer + 1) % 4;
-        g.a = newAuction(g.dealer, deal()); bump();
+        g.dealer = (g.dealer + 1) % 4; g.board++;
+        g.a = newAuction(g.dealer, deal(), vulForBoard(g.board)); bump();
       }}>Next deal</button>
     </div>`}
 
-    ${myCall && html`<div class="btnrow wrap">
-      ${['P', ...legalCalls(a).filter(isBid).slice(0, 14)].map(b =>
-        html`<button class="hint" onClick=${() => { makeCall(a, 0, b); bump(); }}>${callLabel(b)}</button>`)}
-    </div>`}
+    ${myCall && html`<${CallButtons} a=${a} onCall=${b => { makeCall(a, 0, b); bump(); }} />`}
     ${humanIsDummy && a.phase === 'play' && html`<p class="scene">You are dummy: ${NAMES[a.contract.declarer]} plays both hands. Watch and learn.</p>`}
 
     ${myCall && g.coach && (() => {
@@ -293,25 +303,27 @@ function Table({ onResult }) {
 // You bid South against three book bots, whole auction, every deal. At the end
 // all four hands flip up and a shadow auction (solid bots in your seat too)
 // shows where the system would have landed the same cards.
-function systemAuction(dealer, hands) {
-  const s = newAuction(dealer, hands);
+function systemAuction(dealer, hands, vul) {
+  const s = newAuction(dealer, hands, vul);
   let guard = 0;
   while (s.phase === 'auction' && guard++ < 80) makeCall(s, s.turn, botCall(s, s.turn, 'solid'));
   return s;
 }
 const auctionLineOf = a => a.calls.map((c, i) => `${NAMES[(a.dealer + i) % 4]} ${callLabel(c)}`).join(' · ');
-const contractLabel = a => (a.phase === 'passout' || !a.contract ? 'Passed out' : `${callLabel(a.contract.bid)} by ${NAMES[a.contract.declarer]}`);
+const contractLabel = a => (a.phase === 'passout' || !a.contract ? 'Passed out' : `${contractStr(a.contract)} by ${NAMES[a.contract.declarer]}`);
 const sameLanding = (a, s) => {
   if ((a.phase === 'passout') && (s.phase === 'passout')) return true;
   if (!a.contract || !s.contract) return false;
-  return a.contract.bid === s.contract.bid && a.contract.declarer % 2 === s.contract.declarer % 2;
+  return a.contract.bid === s.contract.bid
+    && a.contract.declarer % 2 === s.contract.declarer % 2
+    && a.contract.dbl === s.contract.dbl;
 };
 
 function Auction({ onResult }) {
   const [, redraw] = useState(0);
   const ref = useRef(null);
   if (!ref.current) {
-    ref.current = { a: newAuction(0, deal()), dealer: 0, coach: getCoachPref(), matched: 0, hands: 0 };
+    ref.current = { a: newAuction(0, deal(), vulForBoard(0)), dealer: 0, board: 0, coach: getCoachPref(), matched: 0, hands: 0 };
   }
   const g = ref.current;
   const a = g.a;
@@ -320,7 +332,7 @@ function Auction({ onResult }) {
 
   if (over && !a.judged) {
     a.judged = true;
-    a.sys = systemAuction(a.dealer, a.hands);
+    a.sys = systemAuction(a.dealer, a.hands, a.vul);
     a.match = sameLanding(a, a.sys);
     g.hands++; if (a.match) g.matched++;
     onResult({ right: a.match });
@@ -334,8 +346,8 @@ function Auction({ onResult }) {
 
   const myCall = a.phase === 'auction' && a.turn === 0;
   const next = () => {
-    g.dealer = (g.dealer + 1) % 4;
-    g.a = newAuction(g.dealer, deal());
+    g.dealer = (g.dealer + 1) % 4; g.board++;
+    g.a = newAuction(g.dealer, deal(), vulForBoard(g.board));
     bump();
   };
 
@@ -345,7 +357,7 @@ function Auction({ onResult }) {
       cards: over ? 0 : 13,
       turn: a.phase === 'auction' && a.turn === seat,
     }))}>
-      <p class="callinfo">Bidding only: the play is imagined, the contract is graded. Bots bid the book.</p>
+      <p class="callinfo">Bidding only: the play is imagined, the contract is graded. Bots bid the book. · ${vulStr(a.vul)}</p>
       <p class="callinfo">${auctionLineOf(a) || (a.dealer === 0 ? 'You deal.' : `${NAMES[a.dealer]} deals.`)}${!over && a.turn !== 0 ? ` · ${NAMES[a.turn]} thinking…` : ''}</p>
       ${over && html`<p class="callinfo"><b>${contractLabel(a)}</b></p>`}
     <//>
@@ -362,10 +374,7 @@ function Auction({ onResult }) {
       <${Hand} cards=${a.hands[seat]} toView=${toView} />
     </div>`)}
 
-    ${myCall && html`<div class="btnrow wrap">
-      ${['P', ...legalCalls(a).filter(isBid).slice(0, 14)].map(b =>
-        html`<button class="hint" onClick=${() => { makeCall(a, 0, b); bump(); }}>${callLabel(b)}</button>`)}
-    </div>`}
+    ${myCall && html`<${CallButtons} a=${a} onCall=${b => { makeCall(a, 0, b); bump(); }} />`}
     ${myCall && g.coach && (() => {
       const adv = adviseCall(a, 0);
       return html`<${CoachNote} text=${`System: ${callLabel(adv.call)}. ${adv.why}`} />`;
@@ -480,5 +489,5 @@ export const game = {
     auction: { title: 'Bid the Hand', hint: 'Full auctions, no play: land the system contract.', C: Auction },
     conventions: { title: 'Conventions', hint: 'Study the gadgets: schedules, traps, and the drill.', C: Conventions },
   },
-  studyNote: 'Standard American Yellow Card. Table plays undoubled, non-vulnerable duplicate scoring.',
+  studyNote: 'Standard American Yellow Card. Full duplicate scoring: doubles, redoubles, and rotating vulnerability.',
 };

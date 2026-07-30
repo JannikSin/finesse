@@ -6,11 +6,19 @@
 // yet (doubles, Gerber, Rule of 20) the scene computes the book answer itself.
 // Pure module: imports engine + bid only.
 
-import { SUITS, RANKS, hcp, sortHand, suitCards } from './bridge.engine.js';
+import { SUITS, RANKS, hcp, sortHand, suitCards, newAuction, makeCall } from './bridge.engine.js';
 import {
   openingBid, responseTo, staymanReply, transferReply, blackwoodReply,
-  callLabel, aces, getOpenMin,
+  botCall, callLabel, aces, getOpenMin,
 } from './bridge.bid.js';
+
+// Ask the real bot: RHO (seat 3) opens, what does the solid bot call in our
+// seat? Keeps the trainer and the table bots incapable of disagreeing.
+function botOvercallSeat(open, hand) {
+  const a = newAuction(3, [hand, [], [], []]);
+  makeCall(a, 3, open);
+  return botCall(a, 0, 'solid');
+}
 
 const HON = 'AKQJ';
 const suitDeck = su => RANKS.map(r => r + su);
@@ -308,42 +316,39 @@ const GEN = {
     },
   ],
   takeout: [
-    rng => { // double, overcall, or pass over their opening
+    rng => { // double, overcall, or pass over their opening: the REAL bot answers
       const their = pick(rng, ['H', 'D', 'C']);
       const kind = pick(rng, ['double', 'double', 'overcall', 'pass']);
-      const others = SUITS.filter(s => s !== their);
-      let hand, answer, why;
+      let hand, why;
       if (kind === 'double') {
         const lens = { S: 4, H: 4, D: 4, C: 4 };
         lens[their] = 1;
         hand = buildHand(rng, lens, 12, 15);
-        answer = 'X';
-        why = `${hcp(hand)} HCP, a singleton ${callLabel('1' + their).slice(1)} and 4 cards in every unbid suit: the perfect takeout double. Partner picks the suit.`;
+        why = `${hcp(hand)} HCP, a singleton in their suit and 4 cards in every unbid suit: the perfect takeout double. Partner picks the suit.`;
       } else if (kind === 'overcall') {
         // spades always outrank their 1-level opening
-        const lens = { S: 5, H: 2, D: 3, C: 3 };
-        hand = strengthenSuit(rng, buildHand(rng, lens, 10, 14), 'S', 2);
-        answer = '1S';
+        hand = strengthenSuit(rng, buildHand(rng, { S: 5, H: 2, D: 3, C: 3 }, 10, 14), 'S', 2);
         why = `A good 5-card suit and ${hcp(hand)} HCP: overcall, do not double. Doubling promises support for every unbid suit.`;
       } else {
         hand = buildHand(rng, { S: 3, H: 3, D: 3, C: 4 }, 7, 10);
-        answer = 'P';
         why = `${hcp(hand)} flat points, no 5-card suit, no shortness in theirs: no double, no overcall. Pass and defend.`;
       }
-      const oc = '1S';
+      const answer = botOvercallSeat('1' + their, hand);
+      const wanted = { double: 'X', overcall: '1S', pass: 'P' }[kind];
+      if (answer !== wanted) return null; // bot and scene must agree, else rebuild
       return {
         hand, strip: strip([['RHO', '1' + their], ['You', null]]),
         prompt: `Right-hand opponent opens ${callLabel('1' + their)}. Double, overcall, or pass?`,
-        choices: callChoices(['P', 'X', oc, '1N']),
+        choices: callChoices(['P', 'X', '1S', '1N']),
         answer, why,
       };
     },
   ],
   overcall: [
-    rng => { // quality suit or discipline
+    rng => { // quality suit, a 1NT overcall, or discipline: the REAL bot answers
       const their = pick(rng, ['C', 'D']);
-      const kind = pick(rng, ['overcall', 'overcall', 'pass']);
-      let hand, answer, why;
+      const kind = pick(rng, ['overcall', 'overcall', 'notrump', 'pass']);
+      let hand, why;
       const su = pick(rng, ['S', 'H']);
       if (kind === 'overcall') {
         const lens = { S: 2, H: 2, D: 3, C: 3 };
@@ -351,18 +356,21 @@ const GEN = {
         const total = Object.values(lens).reduce((a, b) => a + b, 0);
         lens.D += 13 - total;
         hand = strengthenSuit(rng, buildHand(rng, lens, 9, 14), su, 2);
-        answer = '1' + su;
         why = `Two of the top three honors in a 5-card suit and ${hcp(hand)} HCP: the textbook one-level overcall.`;
+      } else if (kind === 'notrump') {
+        hand = strengthenSuit(rng, buildHand(rng, { S: 3, H: 3, D: their === 'D' ? 4 : 3, C: their === 'C' ? 4 : 3 }, 15, 18), their, 1);
+        why = `${hcp(hand)} balanced with their suit stopped: the 1NT overcall, a point stronger than an opening 1NT because the seat is more dangerous.`;
       } else {
         hand = buildHand(rng, { S: 4, H: 3, D: 3, C: 3 }, 9, 12);
-        // make the 4-card suit honor-thin so nothing is biddable
-        answer = 'P';
         why = `${hcp(hand)} HCP but no 5-card suit: overcalling on four cards hands declarer the lead through you. Pass; a reopening double may come later.`;
       }
+      const answer = botOvercallSeat('1' + their, hand);
+      const wanted = { overcall: '1' + su, notrump: '1N', pass: 'P' }[kind];
+      if (answer !== wanted) return null;
       return {
         hand, strip: strip([['RHO', '1' + their], ['You', null]]),
         prompt: `They open ${callLabel('1' + their)}. Is your suit worth showing?`,
-        choices: callChoices(['P', '1' + su, '2' + su, '1N']),
+        choices: callChoices(['P', '1' + su, '1N', 'X']),
         answer, why,
       };
     },

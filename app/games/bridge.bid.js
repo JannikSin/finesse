@@ -8,7 +8,7 @@ import {
 } from './bridge.engine.js';
 
 const GL = { C: '♣', D: '♦', H: '♥', S: '♠', N: 'NT' };
-export const callLabel = c => (c === 'P' ? 'Pass' : `${c[0]}${GL[c[1]]}`);
+export const callLabel = c => (c === 'P' ? 'Pass' : c === 'X' ? 'Double' : c === 'XX' ? 'Redouble' : `${c[0]}${GL[c[1]]}`);
 
 // Opening threshold. Book SAYC opens 13+ total points; David's home game opens
 // 12 (Standard American played light, the modern 2/1 style). bridge.js sets it
@@ -21,6 +21,22 @@ const len = (hand, su) => suitCards(hand, su).length;
 const longest = hand => [...SUITS].sort((a, b) => len(hand, b) - len(hand, a) || SUITS.indexOf(b) - SUITS.indexOf(a))[0];
 const goodSuit = (hand, su) => suitCards(hand, su).filter(c => 'AKQJT'.includes(c[0])).length >= 2;
 export const aces = hand => hand.filter(c => c[0] === 'A').length;
+
+// A stopper in a suit: A, K with cover, Q with two, J with three.
+export const hasStopper = (hand, su) => {
+  const s = suitCards(hand, su);
+  return s.some(c => c[0] === 'A')
+    || (s.some(c => c[0] === 'K') && s.length >= 2)
+    || (s.some(c => c[0] === 'Q') && s.length >= 3)
+    || (s.some(c => c[0] === 'J') && s.length >= 4);
+};
+
+// Takeout double shape: opening values, short in theirs, help everywhere else.
+export function takeoutShape(hand, theirSu) {
+  return hcp(hand) >= 12 && theirSu !== 'N'
+    && len(hand, theirSu) <= 2
+    && SUITS.filter(su => su !== theirSu).every(su => len(hand, su) >= 3);
+}
 
 // ---- opening bids ----------------------------------------------------------
 export function openingBid(hand) {
@@ -128,6 +144,38 @@ function partnerLastBid(a, seat) {
   return null;
 }
 const myBids = (a, seat) => a.calls.filter((c, i) => (a.dealer + i) % 4 === seat && isBid(c));
+const lastBidBefore = (a, idx) => {
+  for (let i = idx - 1; i >= 0; i--) if (isBid(a.calls[i])) return a.calls[i];
+  return null;
+};
+
+// Advance partner's takeout double: the command to bid.
+export function advanceDouble(a, seat, hand) {
+  const partner = partnerLastBid(a, seat);
+  const theirBid = lastBidBefore(a, partner.idx);
+  const theirSu = theirBid ? theirBid[1] : null;
+  const p = hcp(hand);
+  const legal = legalCalls(a);
+  const why = base => `${p} HCP after partner's takeout double. ${base}`;
+  // RHO acted over the double (bid or redouble): bidding is voluntary now
+  const freed = a.calls[a.calls.length - 1] !== 'P';
+  if (freed && p < 6) return { call: 'P', why: why('Right-hand opponent bid over the double, so you are off the hook: pass with nothing.') };
+  if (p >= 8 && p <= 11 && theirSu && theirSu !== 'N' && hasStopper(hand, theirSu) && legal.includes('1N')) {
+    return { call: '1N', why: why('8-11 with their suit stopped: 1NT describes it better than a scrappy suit.') };
+  }
+  const unbid = SUITS.filter(su => su !== theirSu)
+    .sort((x, y) => len(hand, y) - len(hand, x) || (['H', 'S'].includes(y) ? 1 : 0) - (['H', 'S'].includes(x) ? 1 : 0));
+  for (const su of unbid) {
+    const cheap = ['1', '2', '3'].map(l => l + su).find(b => legal.includes(b));
+    if (!cheap) continue;
+    const jump = `${Number(cheap[0]) + 1}${su}`;
+    if (p >= 10 && p <= 12 && legal.includes(jump)) {
+      return { call: jump, why: why(`10-12: jump in your best suit to invite. A minimum advance would hide the values partner asked about.`) };
+    }
+    return { call: cheap, why: why(`The double commands a bid: cheapest length in ${GL[su]}${p < 6 ? ', even broke. Passing converts it to a penalty double your side cannot back up' : ''}.`) };
+  }
+  return { call: 'P', why: why('Nothing biddable below game: pass.') };
+}
 
 // Novice bidder: natural bids, no conventions, chronic optimism.
 function noviceCall(a, seat) {
@@ -174,8 +222,10 @@ export function botCall(a, seat, level = 'solid') {
     if (legal.includes(responseTo(o, hand).call)) return responseTo(o, hand).call;
     return 'P';
   }
+  // partner made a takeout double and we have not bid: the command to answer
+  if (partner && partner.call === 'X' && !iBid) return pick(advanceDouble(a, seat, hand));
+
   if (partner && iBid) {
-    // one continuation round: complete transfers/Stayman, raise to game with extras
     const mine = myBids(a, seat);
     const my = mine[mine.length - 1];
     if (my === '1N' && partner.call === '2C') return pick(staymanReply(hand));
@@ -186,20 +236,106 @@ export function botCall(a, seat, level = 'solid') {
     }
     if ((my === '1H' || my === '1S') && partner.call === '2N') return pick({ call: '4' + my[1] }); // Jacoby: game-forcing
     if (my === '1N' && partner.call === '2N') return hcp(hand) >= 17 ? pick({ call: '3N' }) : 'P';
+    const rb = iOpenedAuction(a, seat)
+      ? rebid(a, seat, hand, my, partner)
+      : responderRebid(a, seat, hand, my, partner);
+    if (rb) return pick(rb);
     return 'P';
   }
-  // opponents opened, we have not bid: simple overcall
+  // opponents opened, we have not bid: 1NT overcall, takeout double, or suit overcall
   if (!iBid && lastBid) {
-    const lg = longest(hand);
     const p = hcp(hand);
+    const theirSu = lastBid[1];
+    if (p >= 15 && p <= 18 && isBalanced(hand) && theirSu !== 'N' && hasStopper(hand, theirSu) && legal.includes('1N')) {
+      return '1N';
+    }
+    const lg = longest(hand);
     if (p >= 8 && p <= 16 && len(hand, lg) >= 5 && goodSuit(hand, lg)) {
       const level = bidRank('1' + lg) > bidRank(lastBid) ? '1' : '2';
       const call = level + lg;
       if (legal.includes(call) && (level === '1' || p >= 11)) return call;
     }
+    if (takeoutShape(hand, theirSu) && legal.includes('X')) return 'X';
     return 'P';
   }
   return 'P';
+}
+
+// Did this seat make the partnership's first bid?
+function iOpenedAuction(a, seat) {
+  let mine = -1, theirs = -1;
+  a.calls.forEach((c, i) => {
+    const s = (a.dealer + i) % 4;
+    if (!isBid(c)) return;
+    if (s === seat && mine < 0) mine = i;
+    if (s === (seat + 2) % 4 && theirs < 0) theirs = i;
+  });
+  return mine >= 0 && (theirs < 0 || mine < theirs);
+}
+
+// Responder's second call after opener's rebid. Same strength scale.
+function responderRebid(a, seat, hand, my, partner) {
+  if (!isBid(partner.call)) return null;
+  const legal = legalCalls(a);
+  const tp = totalPoints(hand), p = hcp(hand);
+  const pc = partner.call;
+  // opener raised my suit: invite or drive by strength
+  if (isBid(my) && my[1] !== 'N' && pc[1] === my[1]) {
+    const su = my[1];
+    if (['H', 'S'].includes(su) && tp >= 13 && Number(pc[0]) < 4 && legal.includes('4' + su)) return { call: '4' + su };
+    if (tp >= 11 && tp <= 12) {
+      const next = `${Number(pc[0]) + 1}${su}`;
+      if (Number(pc[0]) + 1 < (su === 'H' || su === 'S' ? 4 : 5) && legal.includes(next)) return { call: next };
+    }
+    return null;
+  }
+  // opener rebid notrump: raise toward 3NT on power
+  if (pc[1] === 'N') {
+    if (p >= 13 && legal.includes('3N')) return { call: '3N' };
+    if (p >= 11 && pc === '1N' && legal.includes('2N')) return { call: '2N' };
+    return null;
+  }
+  // opener showed a second suit: with game values, pick a game
+  if (tp >= 13) {
+    if (['H', 'S'].includes(pc[1]) && len(hand, pc[1]) >= 3 && legal.includes('4' + pc[1])) return { call: '4' + pc[1] };
+    if (isBalanced(hand) && legal.includes('3N')) return { call: '3N' };
+  }
+  return null;
+}
+
+// Opener's second call after partner's new-suit response. One strength scale
+// (totalPoints), no separate estimator. Returns null when nothing systemic fits.
+function rebid(a, seat, hand, my, partner) {
+  if (!['1C', '1D', '1H', '1S'].includes(my)) return null;
+  if (!isBid(partner.call) || partner.call[1] === 'N' || partner.call[1] === my[1]) return null;
+  const legal = legalCalls(a);
+  const psu = partner.call[1];
+  const tp = totalPoints(hand), p = hcp(hand);
+  // raise partner's major with 4-card support, level by strength
+  if (['H', 'S'].includes(psu) && len(hand, psu) >= 4) {
+    const lvl = tp >= 19 ? 4 : tp >= 16 ? 3 : 2;
+    for (let l = lvl; l <= 4; l++) if (legal.includes(l + psu)) return { call: l + psu };
+  }
+  // balanced rebids: cheapest NT 12-14, jump 2NT 18-19
+  if (isBalanced(hand)) {
+    if (p >= 18 && p <= 19 && legal.includes('2N')) return { call: '2N' };
+    if (p >= 12 && p <= 14) {
+      const nt = ['1N', '2N'].find(b => legal.includes(b));
+      if (nt === '1N' || (nt === '2N' && Number(partner.call[0]) >= 2)) return { call: nt };
+    }
+  }
+  // 6-card suit: rebid it, jumping with 16+
+  if (len(hand, my[1]) >= 6) {
+    const from = tp >= 16 ? Number(my[0]) + 2 : Number(my[0]) + 1;
+    for (let l = from; l <= 4; l++) if (legal.includes(l + my[1])) return { call: l + my[1] };
+  }
+  // a second 4-card suit, cheapest
+  for (const su of SUITS) {
+    if (su === my[1] || su === psu || len(hand, su) < 4) continue;
+    const b = ['1', '2', '3'].map(l => l + su).find(x => legal.includes(x));
+    if (b && (b[0] === '1' || tp >= 13)) return { call: b };
+  }
+  return null;
 }
 
 // ---- opening lead grading --------------------------------------------------
@@ -256,12 +392,22 @@ export function adviseCall(a, seat) {
     const r = responseTo(partner.call, hand);
     if (r.call === call) return { call, why: r.why };
   }
+  if (partner && partner.call === 'X' && !iBid) {
+    const adv = advanceDouble(a, seat, hand);
+    if (adv.call === call) return adv;
+  }
   if (partner && iBid) {
     const mine = myBids(a, seat);
     const my = mine[mine.length - 1];
     if (my === '1N' && partner.call === '2C') return { call, why: staymanReply(hand).why };
     if (my === '1N' && (partner.call === '2D' || partner.call === '2H')) return { call, why: transferReply(partner.call).why };
     if (partner.call === '4N') return { call, why: blackwoodReply(hand).why };
+  }
+  if (call === 'X') {
+    return { call, why: `${hcp(hand)} HCP, short in their suit, support for every unbid suit: the takeout double. Partner picks the trump.` };
+  }
+  if (call === '1N' && lastBid && !iBid && (!partner || !isBid(partner.call))) {
+    return { call, why: `${hcp(hand)} HCP balanced with their suit stopped: the 1NT overcall shows 15-18, a point more than an opening.` };
   }
   return {
     call,
