@@ -1,4 +1,4 @@
-﻿const CACHE = 'finesse-v6';
+﻿const CACHE = 'finesse-v7';
 const PRECACHE = [
   './',
   './index.html',
@@ -26,6 +26,7 @@ const PRECACHE = [
   './app/games/bridge.bid.js',
   './app/games/bridge.study.js',
   './app/games/bridge.conventions.js',
+  './app/games/bridge.learn.js',
   './vendor/preact/preact.module.js',
   './vendor/preact/hooks.module.js',
   './vendor/htm/htm.module.js',

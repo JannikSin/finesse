@@ -3,10 +3,29 @@
 // Each entry: bid (the auction shape), when (trigger), schedule (the replies),
 // trap (the classic mistake). quiz: choices are display text, a = index of the
 // right one. drill: true when the dealt convention drill covers it.
+// hook: a one-line memory encoding (the bonmot pattern: every fact gets a
+// hook), repeated on every graded practice answer so it sticks.
+// numbers: bidding-box tiles, the few figures worth memorizing cold.
+
+// The spine: the landmark numbers the whole system hangs on.
+export const SPINE = [
+  { big: '15-17', small: '1NT opening', hook: 'a 16, give or take 1' },
+  { big: '20-21', small: '2NT opening', hook: 'the bid spells itself' },
+  { big: '22+', small: '2♣ opening', hook: 'two clubs, two 2s' },
+  { big: '25', small: 'game', hook: '25 between two hands' },
+  { big: '33', small: 'small slam', hook: 'game plus 8' },
+  { big: '37', small: 'grand slam', hook: 'slam plus 4' },
+];
 
 export const CONVENTIONS = [
   {
     id: 'stayman', name: 'Stayman', bid: '1NT – 2♣', drill: true,
+    hook: 'The 8-ball asks: 8+ points and a 4-card major buy the 2♣ question. Replies climb the ladder: ♦ none, ♥ hearts, ♠ spades.',
+    numbers: [
+      { big: '8+', small: 'points to ask' },
+      { big: '4', small: 'card major exactly' },
+      { big: '♦♥♠', small: 'no · hearts · spades' },
+    ],
     when: 'Partner opens 1NT, you hold 8+ points and at least one 4-card major. 2♣ says nothing about clubs: it asks opener for a 4-card major.',
     schedule: [
       'Opener replies 2♦ = no 4-card major.',
@@ -24,6 +43,12 @@ export const CONVENTIONS = [
   },
   {
     id: 'transfer', name: 'Jacoby Transfers', bid: '1NT – 2♦/2♥', drill: true,
+    hook: 'Point from the door below: bid the suit UNDER your major, opener steps up one. Works broke or loaded: zero points is enough.',
+    numbers: [
+      { big: '5+', small: 'card major' },
+      { big: '0+', small: 'points, any hand' },
+      { big: '+1', small: 'opener steps up' },
+    ],
     when: 'Partner opens 1NT and you hold a 5+ card major, at ANY point count. Bid the suit below your major; opener must complete the transfer.',
     schedule: [
       '2♦ commands 2♥ (you hold 5+ hearts).',
@@ -41,6 +66,12 @@ export const CONVENTIONS = [
   },
   {
     id: 'jacoby2n', name: 'Jacoby 2NT', bid: '1♥/1♠ – 2NT', drill: false,
+    hook: 'The strong raise hides LOW: 13+ with 4 trumps whispers 2NT. Jumping straight to game is the weak bluff, not the strong hand.',
+    numbers: [
+      { big: '13+', small: 'points' },
+      { big: '4+', small: 'trumps' },
+      { big: '3-lvl', small: 'opener shows shortness' },
+    ],
     when: 'Partner opens a major, you hold 4+ trumps and 13+ points. The game-forcing raise: 2NT is artificial, agreeing the major.',
     schedule: [
       'Opener shows a singleton or void by bidding that suit at the 3 level.',
@@ -55,6 +86,12 @@ export const CONVENTIONS = [
   },
   {
     id: 'limitraise', name: 'The Raise Ladder', bid: '1♥/1♠ – 2/3/4♥/♠', drill: false,
+    hook: 'The raise thermometer: 6-9 whisper one level, 10-12 shout a jump, 13 drive to game. Three bands, one degree each.',
+    numbers: [
+      { big: '6-9', small: 'raise one' },
+      { big: '10-12', small: 'jump: limit' },
+      { big: '13+', small: 'force to game' },
+    ],
     when: 'Partner opens a major and you hold 3+ card support. Points decide the level; support decides everything else.',
     schedule: [
       '6-9 support points, 3+ trumps: simple raise to 2.',
@@ -71,6 +108,12 @@ export const CONVENTIONS = [
   },
   {
     id: 'weaktwo', name: 'Weak Twos', bid: '2♦/2♥/2♠', drill: false,
+    hook: 'Cards = level + 4: a 2-bid shows 6 cards, a 3-bid shows 7. Points stay under an opening: 5-11, honors living in the long suit.',
+    numbers: [
+      { big: '6', small: 'cards: level+4' },
+      { big: '5-11', small: 'points' },
+      { big: '2/3', small: 'top honors in suit' },
+    ],
     when: 'A decent 6-card suit, 5-11 points, first or second seat. A preempt: you expect to lose the auction and want their side starting a level higher.',
     schedule: [
       'Partner raises to 3 as a FURTHER preempt, not an invitation. Opener always passes it.',
@@ -86,6 +129,12 @@ export const CONVENTIONS = [
   },
   {
     id: 'strong2c', name: 'Strong 2♣', bid: '2♣ – 2♦', drill: false,
+    hook: 'Two clubs, two 2s: 22+. The one opening partner may NEVER pass; broke hands answer 2♦, which just means "waiting".',
+    numbers: [
+      { big: '22+', small: 'points: two 2s' },
+      { big: '2♦', small: 'waiting reply' },
+      { big: '0', small: 'times you may pass it' },
+    ],
     when: '22+ points, or a hand within one trick of game. Artificial and forcing: says nothing about clubs. Every other opening can be passed; this one cannot.',
     schedule: [
       'Responder bids 2♦ as the waiting response with almost every hand: it says "tell me more".',
@@ -101,6 +150,12 @@ export const CONVENTIONS = [
   },
   {
     id: 'blackwood', name: 'Blackwood', bid: '4NT', drill: true,
+    hook: 'Suits count from zero, alphabetically: ♣0 ♦1 ♥2 ♠3 (club doubles as "all 4"). The 0314 ladder. Then 5NT asks kings the same way.',
+    numbers: [
+      { big: '4NT', small: 'asks aces' },
+      { big: '0·1·2·3', small: '♣ ♦ ♥ ♠ in order' },
+      { big: '5NT', small: 'asks kings' },
+    ],
     when: 'A trump fit is set and your side is slam-hunting: 4NT asks how many aces partner holds. Use it to STAY OUT of slams missing two aces.',
     schedule: [
       '5♣ = 0 or 4 aces.',
@@ -118,6 +173,12 @@ export const CONVENTIONS = [
   },
   {
     id: 'gerber', name: 'Gerber', bid: '1NT/2NT – 4♣', drill: false,
+    hook: 'When notrump talks, CLUBS ask: same 0314 ladder, one floor down. Because 4NT over notrump is a raise invite, not a question.',
+    numbers: [
+      { big: '4♣', small: 'over 1NT/2NT' },
+      { big: '0·1·2·3', small: '♦ ♥ ♠ NT in order' },
+      { big: '-1', small: 'floor below Blackwood' },
+    ],
     when: 'The ace-ask when notrump is the frame: a JUMP to 4♣ directly over partner\'s 1NT or 2NT opening. Keeps the answers a level lower than Blackwood.',
     schedule: [
       '4♦ = 0 or 4 aces.',
@@ -134,6 +195,12 @@ export const CONVENTIONS = [
   },
   {
     id: 'takeout', name: 'Takeout Double', bid: '(1x) – Dbl', drill: false,
+    hook: 'Short in THEIRS, help for the REST, opening count: the double says "partner, pick a suit". And partner must answer, even broke.',
+    numbers: [
+      { big: '13±', small: 'opening values' },
+      { big: '≤2', small: 'cards in their suit' },
+      { big: '3+', small: 'in each unbid suit' },
+    ],
     when: 'An opponent opens, you hold opening values, shortness in their suit, and support for the three unbid suits. The double says "pick a suit, partner". (Not yet in the bots\' auctions here.)',
     schedule: [
       'Partner MUST bid their best suit, even with zero points: passing converts it to penalty.',
@@ -149,6 +216,12 @@ export const CONVENTIONS = [
   },
   {
     id: 'overcall', name: 'Overcalls', bid: '(1x) – 1y/2y', drill: false,
+    hook: 'Suit first, points second: two of the top three honors buys the overcall. 8-16 at the one level; sound opening values at the two.',
+    numbers: [
+      { big: '5+', small: 'card suit, good' },
+      { big: '8-16', small: 'one level' },
+      { big: '2/3', small: 'top honors' },
+    ],
     when: 'They open, you hold a good 5+ card suit. At the one level: 8-16 points. At the two level: sound opening values and a strong suit.',
     schedule: [
       'The suit quality matters more than the count: two of the top three honors is the standard.',
@@ -164,6 +237,12 @@ export const CONVENTIONS = [
   },
   {
     id: 'rule20', name: 'Rule of 20', bid: 'the borderline opening', drill: false,
+    hook: 'HCP plus your two longest suit lengths: at 20, open. Shape is tricks that points cannot see; 4-3-3-3 never qualifies.',
+    numbers: [
+      { big: '20', small: 'HCP + 2 longest' },
+      { big: '11+5+4', small: 'the classic light open' },
+      { big: '4333', small: 'never counts' },
+    ],
     when: 'A hand short of full opening count: add your HCP to the lengths of your two longest suits. At 20 or more, open in first or second seat.',
     schedule: [
       '11 HCP with 5-4 shape: 11 + 5 + 4 = 20, open.',

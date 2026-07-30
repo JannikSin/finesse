@@ -17,7 +17,8 @@ import {
   adviseCall, adviseMove, setOpenMin, getOpenMin,
 } from './bridge.bid.js';
 import { STUDY } from './bridge.study.js';
-import { CONVENTIONS, QUIZ } from './bridge.conventions.js';
+import { CONVENTIONS, QUIZ, SPINE } from './bridge.conventions.js';
+import { practiceScene, PRACTICE_IDS } from './bridge.learn.js';
 
 // Opening threshold pref: 13 = book SAYC, 12 = David's home game.
 const OPEN_KEY = 'finesse.bridge.openmin';
@@ -125,11 +126,12 @@ const conventionDrill = {
   grade(scene, answer) {
     if (scene.kind === 'quiz') {
       const right = Number(answer) === scene.q.a;
+      const conv = CONVENTIONS.find(c => c.name === scene.q.conv);
       return {
         right,
         title: right ? 'Correct.' : 'Convention missed.',
         lead: `The answer: ${scene.q.choices[scene.q.a]}.`,
-        detail: [scene.q.why],
+        detail: [scene.q.why, conv && `Hook: ${conv.hook}`].filter(Boolean),
       };
     }
     const v = scene.kind === 'blackwood' ? blackwoodReply(scene.hand)
@@ -383,24 +385,90 @@ function Auction({ onResult }) {
   </div>`;
 }
 
-// ---- conventions study ------------------------------------------------------
-function Conventions() {
-  const [, redraw] = useState(0);
-  return html`<div class="study">
-    <p class="tag">The SAYC gadget book: what each convention means, the full reply schedule, and the classic trap. Tap a name to open it, then drill it until the schedule is reflex.</p>
-    ${CONVENTIONS.map(cv => html`<details class="conv" key=${cv.id}>
-      <summary><b>${cv.name}</b> · ${cv.bid}</summary>
+// ---- conventions study: hooks, bidding-box tiles, constructed-hand practice --
+// Memory model borrowed from the bonmot decks: every fact carries a HOOK, and
+// the hook is repeated on every graded answer so recall binds to it.
+const LEARN_KEY = 'finesse.bridge.learn';
+const loadLearn = () => { try { return JSON.parse(localStorage.getItem(LEARN_KEY)) || {}; } catch { return {}; } };
+const saveLearn = m => localStorage.setItem(LEARN_KEY, JSON.stringify(m));
+
+const NumRow = ({ tiles }) => html`<div class="numrow">
+  ${tiles.map(t => html`<div class="numtile"><b>${t.big}</b><span>${t.small}</span>${t.hook && html`<i>${t.hook}</i>`}</div>`)}
+</div>`;
+
+const Strip = ({ calls }) => html`<div class="strip">
+  ${calls.map(s => html`<span class="stripchip ${s.call === null ? 'ask' : ''} ${s.who === 'You' ? 'you' : ''} ${s.call === 'P' ? 'quiet' : ''}">
+    <i>${s.who}</i>${s.call === null ? '?' : s.call === 'X' ? 'Dbl' : callLabel(s.call)}
+  </span>`)}
+</div>`;
+
+function ConvCard({ cv, st, record }) {
+  const [scene, setScene] = useState(null);
+  const [picked, setPicked] = useState(null);
+  const streak = st ? Math.min(st.streak, 5) : 0;
+  const canPractice = PRACTICE_IDS.includes(cv.id);
+  const deal = () => { setScene(practiceScene(cv.id)); setPicked(null); };
+  const right = scene && picked !== null && picked === scene.answer;
+
+  return html`<details class="conv" key=${cv.id} ...${scene ? { open: true } : {}}>
+    <summary><b>${cv.name}</b> · ${cv.bid}
+      <span class="dots ${streak >= 5 ? 'full' : ''}" title="practice streak">${'●'.repeat(streak)}${'○'.repeat(5 - streak)}</span>
+    </summary>
+    <p class="hook">${cv.hook}</p>
+    <${NumRow} tiles=${cv.numbers} />
+    ${!scene && html`<div>
       <p class="scene">${cv.when}</p>
       <ul>${cv.schedule.map(s => html`<li>${s}</li>`)}</ul>
-      ${cv.trap && html`<p class="coachnote">⚠ ${cv.trap}</p>`}
-    </details>`)}
-    <a class="tile" href="#bridge/convention"><b>Drill it</b><span>Convention Check quizzes all of these, plus dealt hands for Stayman, transfers and Blackwood.</span></a>
+      <p class="coachnote">⚠ ${cv.trap}</p>
+      ${canPractice && html`<div class="btnrow">
+        <button class="big" onClick=${deal}>Practice this</button>
+        ${st && st.total > 0 && html`<span class="stats">${st.right}/${st.total} hands</span>`}
+      </div>`}
+    </div>`}
+    ${scene && html`<div>
+      <${Strip} calls=${scene.strip} />
+      <p class="scene">${scene.prompt}</p>
+      <${Hand} cards=${scene.hand} toView=${toView} />
+      <p class="stats">${hcp(scene.hand)} HCP</p>
+      ${picked === null && html`<div class="btnrow wrap">
+        ${scene.choices.map(ch => html`<button class="big" onClick=${() => { setPicked(ch.id); record(cv.id, ch.id === scene.answer); }}>${ch.label}</button>`)}
+      </div>`}
+      ${picked !== null && html`<div class="verdict ${right ? 'good' : 'bad'}">
+        <b>${right ? 'Locked in.' : 'Not yet.'}</b>
+        <span class="call">${(scene.choices.find(c => c.id === scene.answer) || {}).label}: ${scene.why}</span>
+        <span class="call hookline">${cv.hook}</span>
+        <div class="btnrow">
+          <button class="big" onClick=${deal}>Next hand</button>
+          <button class="hint" onClick=${() => { setScene(null); setPicked(null); }}>Back to the card</button>
+        </div>
+      </div>`}
+    </div>`}
+  </details>`;
+}
+
+function Conventions() {
+  const [, redraw] = useState(0);
+  const bump = () => redraw(n => n + 1);
+  const mastery = loadLearn();
+  const record = (id, ok) => {
+    const m = loadLearn();
+    const s = m[id] || { right: 0, total: 0, streak: 0 };
+    s.total++; if (ok) { s.right++; s.streak++; } else s.streak = 0;
+    m[id] = s; saveLearn(m); bump();
+  };
+  return html`<div class="study convhub">
+    <p class="tag">Every convention is a few numbers, a reply ladder, and a hook to hang them on. Read the hook, practice the constructed hands until the streak dots fill, then take it to Bid the Hand.</p>
+    <p class="spinehead">The spine · the six numbers the whole system hangs on</p>
+    <${NumRow} tiles=${SPINE} />
+    ${CONVENTIONS.map(cv => html`<${ConvCard} key=${cv.id} cv=${cv} st=${mastery[cv.id]} record=${record} />`)}
+    <a class="tile" href="#bridge/convention"><b>Convention Check</b><span>The mixed drill: quiz questions across all 11 plus dealt hands. Different muscle, same numbers.</span></a>
+    <a class="tile" href="#bridge/auction"><b>Bid the Hand</b><span>Whole auctions where the conventions show up uninvited. The final exam.</span></a>
     <div class="btnrow wrap controls-row">
       <span class="scene">Openings:</span>
       ${[13, 12].map(n => html`<button class="hint ${getOpenMin() === n ? 'on' : ''}"
-        onClick=${() => { saveOpenMin(n); redraw(x => x + 1); }}>${n}+ ${n === 13 ? '(book SAYC)' : '(home game)'}</button>`)}
+        onClick=${() => { saveOpenMin(n); bump(); }}>${n}+ ${n === 13 ? '(book SAYC)' : '(home game)'}</button>`)}
     </div>
-    <p class="stats">Book SAYC opens on 13+ total points (Rule of 20 for shapely 11s). The 12+ setting is Standard American played light, modern 2/1 style: drills, bots and coach all follow it.</p>
+    <p class="stats">Book SAYC opens on 13+ total points (Rule of 20 for shapely 11s). The 12+ setting is Standard American played light, modern 2/1 style: drills, bots and coach all follow it. The same numbers ride the Bridge deck in Bonmot for daily recall.</p>
   </div>`;
 }
 

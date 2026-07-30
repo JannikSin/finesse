@@ -228,12 +228,53 @@ button.hint {
 .study h2 { font-size: 1.15rem; color: var(--brass); margin-bottom: 8px; }
 .study ul { padding-left: 22px; display: grid; gap: 7px; color: var(--chalk); line-height: 1.5; }
 
-/* conventions reference */
-details.conv { margin-bottom: 10px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 10px 14px; }
-details.conv summary { cursor: pointer; color: var(--brass); font-size: 1.05rem; padding: 2px 0; }
+/* conventions learn hub */
+details.conv { margin-bottom: 10px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 10px 14px; background: rgba(0, 0, 0, 0.12); }
+details.conv summary { cursor: pointer; color: var(--brass); font-size: 1.05rem; padding: 2px 0; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; list-style: none; }
+details.conv summary::-webkit-details-marker { display: none; }
+details.conv summary::before { content: '▸'; color: var(--chalk-dim); font-size: 0.9rem; }
+details.conv[open] summary::before { content: '▾'; }
 details.conv[open] summary { margin-bottom: 8px; }
 details.conv .scene { margin-bottom: 8px; }
 details.conv ul { margin-bottom: 8px; }
+details.conv .btnrow { align-items: center; gap: 12px; }
+
+.dots { margin-left: auto; font-size: 0.8rem; letter-spacing: 3px; color: var(--chalk-dim); }
+.dots.full { color: var(--brass); text-shadow: 0 0 8px rgba(234, 183, 84, 0.6); }
+
+/* the hook: the one line to remember */
+.hook {
+  font-family: Bricolage, sans-serif; font-weight: 650; font-style: italic;
+  color: var(--brass); line-height: 1.45; margin-bottom: 10px;
+  padding-left: 12px; border-left: 3px solid var(--brass);
+}
+.verdict .hookline { color: var(--brass); font-style: italic; }
+
+/* bidding-box number tiles */
+.spinehead { color: var(--chalk-dim); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.08em; margin: 4px 0 6px; }
+.numrow { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.numtile {
+  background: var(--card); color: var(--ink); border: 1px solid #c9c4b8; border-radius: 8px;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+  padding: 8px 12px 7px; min-width: 86px; flex: 1 1 100px; max-width: 170px;
+  display: flex; flex-direction: column; gap: 2px; text-align: center;
+}
+.numtile b { font-family: JBMono, monospace; font-size: 1.3rem; line-height: 1.1; letter-spacing: 0.01em; }
+.numtile span { font-size: 0.74rem; color: #5a5648; line-height: 1.25; }
+.numtile i { font-size: 0.72rem; color: #8a2f27; font-style: italic; line-height: 1.25; }
+
+/* auction strip: the table talk so far */
+.strip { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.stripchip {
+  display: inline-flex; flex-direction: column; align-items: center; gap: 1px;
+  background: var(--card); color: var(--ink); border: 1px solid #c9c4b8; border-radius: 7px;
+  padding: 5px 11px; font-family: JBMono, monospace; font-weight: 700; font-size: 1rem;
+}
+.stripchip i { font-style: normal; font-weight: 500; font-size: 0.68rem; color: #5a5648; text-transform: uppercase; letter-spacing: 0.05em; }
+.stripchip.quiet { opacity: 0.62; }
+.stripchip.you i { color: #8a6a1c; }
+.stripchip.ask { background: var(--brass); border-color: var(--brass); box-shadow: 0 0 10px rgba(234, 183, 84, 0.45); }
+.stripchip.ask i { color: #4c3a10; }
 
 /* bid-the-hand reveal */
 .reveal { margin-top: 10px; }

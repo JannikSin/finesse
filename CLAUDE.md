@@ -18,7 +18,12 @@ advanced strategy), and full play vs bots where built:
   quiz bank over all 11 gadgets), and lead drills; full-auction table with dummy
   play; Bid the Hand mode (`#bridge/auction`: full auctions vs book bots, no
   play, graded against a shadow all-bot auction on the same cards); Conventions
-  reference screen (`#bridge/conventions`, data in `bridge.conventions.js`);
+  LEARN HUB (`#bridge/conventions`: per-convention memory hook + bidding-box
+  number tiles + spine strip, data in `bridge.conventions.js`; per-convention
+  practice on CONSTRUCTED hands from `bridge.learn.js` generators, graded by
+  the same system functions as the bots, streak dots in localStorage
+  `finesse.bridge.learn`; hooks repeat on every graded answer, the bonmot
+  pattern, and a matching `bridge` deck lives in the bonmot repo for FSRS);
   SAYC per the ACBL booklet, opening threshold toggle 13+ (book) / 12+ (David's
   home game) via `setOpenMin`, pref `finesse.bridge.openmin`
 Routes: `#<game>` menu, `#<game>/<drillId>`, `#<game>/table`, `#<game>/study`,
@@ -57,7 +62,7 @@ header comment of each study section / game file.
 - `tests/` — engine/games/bridge unit tests + `sim.test.mjs`: all-bot full-table
   simulations at every level (legality-checked every move) and seeded
   skill-ladder assertions (expert beats novice in all five playable games).
-  `npm test` (62 tests).
+  `npm test` (63 tests).
 
 ## Adding a game
 1. `<game>.engine.js` (pure) + `<game>.coach.js` (pure) + `<game>.js` (module).
@@ -75,6 +80,6 @@ header comment of each study section / game file.
 - Wergin book (archive.org, borrow-only) pending David's login.
 
 ## Verify
-- `npm test` (62 tests)
+- `npm test` (63 tests)
 - `npx serve` at repo root; hard-refresh twice for sw.js.
 - Icons: `node tools/make-icons.mjs`.

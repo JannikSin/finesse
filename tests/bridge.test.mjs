@@ -160,3 +160,35 @@ test('bridge: bid-only auctions terminate at both opening thresholds', async () 
   }
   setOpenMin(13);
 });
+
+test('bridge: practice generators produce valid graded scenes', async () => {
+  const { practiceScene, PRACTICE_IDS, buildHand } = await import('../app/games/bridge.learn.js');
+  const { CONVENTIONS } = await import('../app/games/bridge.conventions.js');
+  // every convention with a hook is practicable
+  assert.equal(PRACTICE_IDS.length, CONVENTIONS.length);
+  for (const cv of CONVENTIONS) {
+    assert.ok(PRACTICE_IDS.includes(cv.id), cv.id + ' has practice');
+    assert.ok(cv.hook && cv.hook.length > 20, cv.id + ' hook');
+    assert.ok(cv.numbers && cv.numbers.length === 3, cv.id + ' numbers');
+    const seen = new Set();
+    for (let i = 0; i < 120; i++) {
+      const s = practiceScene(cv.id);
+      assert.ok(s, cv.id + ' scene builds');
+      assert.equal(s.hand.length, 13, cv.id + ' 13 cards');
+      assert.equal(new Set(s.hand).size, 13, cv.id + ' unique cards');
+      assert.ok(s.choices.length >= 3 && s.choices.some(c => c.id === s.answer), cv.id + ' answer offered');
+      assert.ok(s.prompt && s.why, cv.id + ' prose');
+      assert.ok(s.strip.length >= 1 && s.strip[s.strip.length - 1].who === 'You' && s.strip[s.strip.length - 1].call === null, cv.id + ' strip ends on you');
+      seen.add(s.answer);
+    }
+    assert.ok(seen.size >= 2, cv.id + ' varies its answers: ' + [...seen]);
+  }
+  // buildHand honors shape and points
+  for (let i = 0; i < 50; i++) {
+    const h = buildHand(Math.random, { S: 5, H: 2, D: 3, C: 3 }, 15, 17);
+    assert.equal(h.length, 13);
+    assert.equal(h.filter(c => c[1] === 'S').length, 5);
+    const p = B.hcp(h);
+    assert.ok(p >= 15 && p <= 17, 'hcp in window, got ' + p);
+  }
+});
