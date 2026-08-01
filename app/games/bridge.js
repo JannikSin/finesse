@@ -4,7 +4,7 @@ import { html } from 'htm/preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
 import {
   Card, Hand, GLYPH, rankLabel, frenchView,
-  getLevelPref, setLevelPref, getCoachPref, setCoachPref, levelForSeat,
+  getLevelPref, setLevelPref, getCoachPref, setCoachPref, getSpeedPref, levelForSeat,
   TableControls, CoachNote, TableRing,
 } from '../cards.js';
 import {
@@ -20,7 +20,7 @@ import { STUDY } from './bridge.study.js';
 import { CONVENTIONS, QUIZ, SPINE } from './bridge.conventions.js';
 import { practiceScene, PRACTICE_IDS } from './bridge.learn.js';
 
-// Opening threshold pref: 13 = book SAYC, 12 = David's home game.
+// Opening threshold pref: 13 = book SAYC, 12 = the house game.
 const OPEN_KEY = 'finesse.bridge.openmin';
 setOpenMin(localStorage.getItem(OPEN_KEY) === '12' ? 12 : 13);
 const saveOpenMin = n => { setOpenMin(n); localStorage.setItem(OPEN_KEY, String(getOpenMin())); };
@@ -228,7 +228,7 @@ function Table({ onResult }) {
         const humanTurn = seat === 0 ? !humanIsDummy : (seat === 2 && a.contract.declarer === 0);
         if (!humanTurn) { playCard(a, seat, botPlay(a, seat, lvl(seat))); afterPlay(); bump(); }
       }
-    }, g.showTrick ? 5000 : 420);
+    }, g.showTrick ? 5000 : getSpeedPref());
     return () => clearTimeout(t);
   });
 
@@ -340,7 +340,7 @@ function Auction({ onResult }) {
 
   useEffect(() => {
     if (a.phase !== 'auction' || a.turn === 0) return;
-    const t = setTimeout(() => { makeCall(a, a.turn, botCall(a, a.turn, 'solid')); bump(); }, 420);
+    const t = setTimeout(() => { makeCall(a, a.turn, botCall(a, a.turn, 'solid')); bump(); }, getSpeedPref());
     return () => clearTimeout(t);
   });
 

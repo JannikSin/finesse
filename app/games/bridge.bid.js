@@ -10,7 +10,7 @@ import {
 const GL = { C: '♣', D: '♦', H: '♥', S: '♠', N: 'NT' };
 export const callLabel = c => (c === 'P' ? 'Pass' : c === 'X' ? 'Double' : c === 'XX' ? 'Redouble' : `${c[0]}${GL[c[1]]}`);
 
-// Opening threshold. Book SAYC opens 13+ total points; David's home game opens
+// Opening threshold. Book SAYC opens 13+ total points; the house game opens
 // 12 (Standard American played light, the modern 2/1 style). bridge.js sets it
 // from the saved pref; drills, bots and the coach all follow it.
 let OPEN_MIN = 13;

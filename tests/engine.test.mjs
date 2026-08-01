@@ -5,7 +5,7 @@ import {
   deal, newHand, pass, pick, buryAndCall, callableSuits, legalMoves,
   currentTurn, playCard, score, sortHand,
 } from '../app/games/sheepshead.engine.js';
-import { evalPick, suggestBury, gradeLeads, botPickDecision, botPlay } from '../app/games/sheepshead.coach.js';
+import { evalPick, suggestBury, gradeLeads, botPickDecision, botPlay, adviseMove } from '../app/games/sheepshead.coach.js';
 
 // deterministic rng
 const rng = (seed => () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31)(42);
@@ -135,16 +135,98 @@ test('scoring ladder', () => {
   const s2 = mk([pickerCards, []], [rest, [], []]);
   const r2 = score(s2);
   assert.ok(!r2.win);
-  assert.equal(r2.delta[0], -2);
+  // double on the bump: picker-side losses always pay x2
+  assert.equal(r2.bump, 2);
+  assert.equal(r2.delta[0], -4);
+  assert.equal(r2.delta.reduce((a, b) => a + b, 0), 0, 'zero-sum with bump');
+});
+
+test('coach: never over a winning teammate, schmears are never queens', () => {
+  // Trick so far: seat3 led AC, seat4 threw 9C, seat0 (the picker) trumped in.
+  // Seat1 is the partner (holds the called ace) and could overtrump with QS.
+  const mk = winCard => {
+    const s = newHand(2, rng); // first seat = 3
+    s.phase = 'play'; s.picker = 0; s.partner = 1;
+    s.calledSuit = 'H'; s.calledAce = 'AH'; s.buried = ['KD', '9H'];
+    s.hands = [
+      sortHand(['QH', 'JD', '9D', '8D', '7D']),
+      sortHand(['QS', 'AH', '8H', '7S', 'KS', 'TS']), // partner, void in clubs
+      sortHand(['JC', 'JS', 'KH', 'TH', '8S', '9S']),
+      sortHand(['TC', '7H', '7C', '8C', 'QD']),
+      sortHand(['AS', 'AD', 'TD', 'KC', winCard === 'JH' ? 'QC' : 'JH']),
+    ];
+    s.trick = ['AC', '9C', winCard]; s.trickSeats = [3, 4, 0]; s.leader = 3;
+    return s;
+  };
+  for (const level of ['solid', 'expert']) {
+    // Picker winning with JH: not safe yet, but it is still the partner's side —
+    // never go over, keep the queen home, throw a blank.
+    const low = botPlay(mk('JH'), 1, level);
+    assert.notEqual(low, 'QS', level + ': must not trump over the winning picker');
+    assert.equal(points(low), 0, level + ': throws a blank, not points');
+    // Picker winning with QC (boss): schmear the ten, never a queen.
+    assert.equal(botPlay(mk('QC'), 1, level), 'TS', level + ': schmear the fat ten');
+  }
+});
+
+test('coach: expert end-position play fires on trick 4 (and only for expert)', () => {
+  // Trick 4, seats 2,3,4,0 have played, the picker (0) is winning with JD,
+  // and the partner (seat 1, holding the picker on his right) is last with
+  // QC + ducks in hand. Expert takes the trick to hand the picker last
+  // position on trick 5; solid never plays over its mate.
+  const s = newHand(1, rng); // first seat = 2
+  s.phase = 'play'; s.picker = 0; s.partner = 1;
+  s.calledSuit = 'H'; s.calledAce = 'AH'; s.aceFlipped = true; s.calledSuitLed = true;
+  s.buried = ['KD', '9H']; s.trickNo = 3;
+  s.hands = [
+    sortHand(['QD', 'TD', '8D']),        // picker: played JD this trick
+    sortHand(['QC', '7H', '8H']),        // partner, last to play
+    sortHand(['TS', 'KS']),
+    sortHand(['AC', 'TC']),
+    sortHand(['AS', '9C']),
+  ];
+  s.trick = ['9S', '8S', '7S', 'JD']; s.trickSeats = [2, 3, 4, 0]; s.leader = 2;
+  const expert = adviseMove(s, 1, 'expert');
+  assert.equal(expert.card, 'QC');
+  assert.ok(expert.why.includes('Take it from the picker'), 'end-position reason shown');
+  const solid = botPlay(s, 1, 'solid');
+  assert.notEqual(solid, 'QC', 'solid never plays over its mate here');
 });
 
 test('coach: pick verdicts follow the book', () => {
   assert.equal(evalPick(['QC', 'QS', 'QH', 'JD', '7D', 'AC'], 2).verdict, 'pick'); // 5 trump
-  assert.equal(evalPick(['QC', 'QS', '7D', 'AC', 'TC', '9S'], 1).verdict, 'pick'); // 2 queens + trump
-  assert.equal(evalPick(['QH', 'JD', '9D', '8D', 'AC', 'TS'], 3).verdict, 'pick'); // queen + 3 trump
+  assert.equal(evalPick(['QC', 'QS', '7D', 'AC', 'TC', '9S'], 1).verdict, 'pick'); // 2 queens + trump + bury points
+  assert.equal(evalPick(['QH', 'JD', '9D', '8D', 'AC', 'TS'], 3).verdict, 'pick'); // queen + 3 trump + bury points
   assert.equal(evalPick(['9C', '8C', '7C', '9S', '8S', 'AH'], 0).verdict, 'pass'); // trumpless junk
   assert.equal(evalPick(['QC', 'QS', 'AC', 'TC', '9S', '8H'], 2).verdict, 'pass'); // black queens mid-seat
   assert.equal(evalPick(['QC', 'QS', 'AC', 'TC', '9S', '8H'], 0).verdict, 'pick'); // black queens leading
+  // Strupp: the 2Q and 1Q picking hands want points to bury; without them, borderline
+  assert.equal(evalPick(['QC', 'QH', 'JD', '9C', '8S', '7H'], 2).verdict, 'either');
+  assert.equal(evalPick(['QH', 'JC', 'JD', '9D', '9C', '8S'], 2).verdict, 'either');
+});
+
+test('coach: Strupp play rules at the table', () => {
+  // Rule 22: the partner in the lead plays a SMALL trump, not a big queen.
+  const lead = gradeLeads(['QS', 'JD', 'AH', '9S', '8C', '7C'], 'partner', 'H');
+  assert.equal(lead.grades['JD'][0], 'best');
+  assert.notEqual(lead.grades['QS'][0], 'best');
+  // Rule 26: defender trumping a fail trick sends a man, not a boy. Play
+  // order is 3,4,0,1,2 — seat 4 plays second, the picker (seat 0) is still
+  // behind, so the 60% rule stays out of it.
+  const s = newHand(2, rng); // first seat = 3
+  s.phase = 'play'; s.picker = 0; s.partner = 1;
+  s.calledSuit = 'H'; s.calledAce = 'AH'; s.buried = ['KD', '9H'];
+  s.hands = [
+    sortHand(['QH', 'JH', 'QD', '8D', '7D', 'KH']),  // picker, still to play
+    sortHand(['QS', 'AH', '8H', '7S', 'KS', 'TS']),  // partner, still to play
+    sortHand(['AD', 'TD', 'KC', '9C', 'QC', '8C']),
+    sortHand(['TC', '7C', '9D', 'AS', 'JS']),        // led AC
+    sortHand(['JC', 'JD', 'TH', '8S', '9S', '7H']),  // to play now, void in clubs
+  ];
+  s.trick = ['AC']; s.trickSeats = [3]; s.leader = 3;
+  for (const level of ['solid', 'expert']) {
+    assert.equal(botPlay(s, 4, level), 'JC', level + ': trump the fail trick with the man, not the boy');
+  }
 });
 
 test('coach: bury keeps the hold card and calls a real suit', () => {
@@ -168,7 +250,7 @@ test('coach: lead grades', () => {
   assert.equal(g1.grades['AC'][0], 'bad');
   const g2 = gradeLeads(['AH', 'QD', '9S'], 'partner', 'H');
   assert.equal(g2.grades['AH'][0], 'terrible');
-  assert.equal(g2.grades['QD'][0], 'good');
+  assert.equal(g2.grades['QD'][0], 'best'); // his only trump IS the small trump lead (Strupp Rule 22)
   const g3 = gradeLeads(['9H', 'QD', 'AS'], 'defender', 'H');
   assert.equal(g3.grades['9H'][0], 'best');
   assert.equal(g3.grades['QD'][0], 'bad');
@@ -180,7 +262,31 @@ test('rules module purity: engine and coach import nothing external', async () =
     const src = fs.readFileSync(new URL(`../app/games/${f}`, import.meta.url), 'utf8');
     const imports = [...src.matchAll(/from '([^']+)'/g)].map(m => m[1]);
     imports.forEach(i => assert.ok(i.startsWith('./'), `${f} imports only siblings, got ${i}`));
-    assert.ok(!/innerHTML|eval\(|new Function/.test(src), `${f} clean`);
+    // coaches may only reach their engine: the one-way layering is load-bearing
+    if (f.endsWith('.coach.js')) {
+      imports.forEach(i => assert.ok(i.endsWith('.engine.js'), `${f} imports only its engine, got ${i}`));
+    }
   }
+});
+
+test('hard rules: no dangerous DOM sinks anywhere, sw cache prefix intact', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  // every first-party source file that can touch the DOM
+  const roots = [new URL('../app/', import.meta.url), new URL('../app/games/', import.meta.url)];
+  const files = roots.flatMap(dir =>
+    fs.readdirSync(dir).filter(f => f.endsWith('.js')).map(f => new URL(f, dir)));
+  files.push(new URL('../index.html', import.meta.url), new URL('../sw.js', import.meta.url));
+  for (const f of files) {
+    const src = fs.readFileSync(f, 'utf8');
+    assert.ok(!/innerHTML|dangerouslySetInnerHTML|\beval\(|new Function/.test(src),
+      `${path.basename(f.pathname)} contains a forbidden DOM sink`);
+  }
+  // the sw cleanup MUST stay scoped to this app's caches: the origin is shared
+  // with sibling PWAs and an unprefixed cleanup evicts their caches
+  const sw = fs.readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
+  assert.match(sw, /const CACHE = 'finesse-v\d+'/, 'CACHE name keeps the finesse- prefix');
+  assert.match(sw, /keys\.filter\(k => k\.startsWith\('finesse-'\)/, 'activate cleanup filters to finesse- caches');
+  assert.match(sw, /cacheName: CACHE/, 'fetch lookup scoped to our own cache');
 });
 

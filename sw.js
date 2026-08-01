@@ -1,4 +1,4 @@
-﻿const CACHE = 'finesse-v8';
+﻿const CACHE = 'finesse-v10';
 const PRECACHE = [
   './',
   './index.html',
@@ -35,6 +35,7 @@ const PRECACHE = [
   './vendor/fonts/jetbrains-mono-var.woff2',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './icons/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', e => {
@@ -50,7 +51,9 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request, { ignoreSearch: true }).then(hit => hit || fetch(e.request))
+    // cacheName scopes the lookup to OUR cache: the origin is shared with
+    // sibling PWAs and a cross-app URL collision must never serve their files
+    caches.match(e.request, { ignoreSearch: true, cacheName: CACHE }).then(hit => hit || fetch(e.request))
   );
 });
 

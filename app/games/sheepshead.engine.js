@@ -190,12 +190,15 @@ export function score(s) {
   let stake = 1;
   if (win) { if (defTricks === 0) stake = 3; else if (defPts < 31) stake = 2; }
   else { if (pickerTricks === 0) stake = 3; else if (pickerPts < 31) stake = 2; }
+  // Double on the bump: every picker-side loss pays double. House rule, always
+  // on — same as tally's sheepshead sheet.
+  const bump = win ? 1 : 2;
   const sign = win ? 1 : -1;
   const delta = [0, 0, 0, 0, 0];
   for (let seat = 0; seat < 5; seat++) {
-    if (seat === s.picker) delta[seat] = sign * stake * (s.alone ? 4 : 2);
-    else if (seat === s.partner) delta[seat] = sign * stake;
-    else delta[seat] = -sign * stake;
+    if (seat === s.picker) delta[seat] = sign * stake * bump * (s.alone ? 4 : 2);
+    else if (seat === s.partner) delta[seat] = sign * stake * bump;
+    else delta[seat] = -sign * stake * bump;
   }
-  return { pickerPts, defPts, win, stake, delta };
+  return { pickerPts, defPts, win, stake, bump, delta };
 }

@@ -3,7 +3,7 @@ import { html } from 'htm/preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
 import {
   Card, Hand, SuitChip, GLYPH, rankLabel, frenchView,
-  getLevelPref, setLevelPref, getCoachPref, setCoachPref, levelForSeat,
+  getLevelPref, setLevelPref, getCoachPref, setCoachPref, getSpeedPref, levelForSeat,
   TableControls, CoachNote, TableRing,
 } from '../cards.js';
 import {
@@ -11,8 +11,8 @@ import {
   playCard, isTrump, sortHand, handPoints, FAIL_SUITS,
 } from './sheepshead.engine.js';
 import {
-  evalPick, suggestBury, gradeLeads, botPickDecision, botPlay, botBuryChoice,
-  adviseMove,
+  evalPick, suggestBury, gradeLeads, botPickDecision, botBuryChoice,
+  adviseMove, TALK,
 } from './sheepshead.coach.js';
 import { STUDY } from './sheepshead.study.js';
 
@@ -148,29 +148,54 @@ function Table({ onResult }) {
     ref.current = {
       s: newHand(4), scores: [0, 0, 0, 0, 0], lastTrick: null, buriedSel: [], note: '',
       pref: getLevelPref(), coach: getCoachPref(), seed: 0,
+      rows: [], sheetOpen: false, // one row per scored hand, tally-style sheet
+      talk: null, // {seat, text, until}: one speech bubble at a time, bots only
     };
   }
   const g = ref.current;
   const s = g.s;
   const bump = () => redraw(n => n + 1);
   const lvl = seat => levelForSeat(g.pref, seat, g.seed);
+  const say = (seat, ev, chance = 1) => {
+    if (seat !== 0 && Math.random() < chance) {
+      const bank = TALK[ev];
+      // time-based lifetime: readable at any bot speed
+      g.talk = { seat, text: bank[Math.floor(Math.random() * bank.length)], until: Date.now() + 2600 };
+    }
+  };
 
   useEffect(() => {
     const t = setTimeout(() => {
+      // expire the bubble with a re-render so it cannot outlive its window
+      if (g.talk && Date.now() > g.talk.until) { g.talk = null; bump(); }
       if (g.lastTrick) { g.lastTrick = null; bump(); return; }
       if (s.phase === 'pick' && s.turn !== 0) {
-        if (botPickDecision(s, s.turn, lvl(s.turn))) pick(s, s.turn); else pass(s);
+        const seat = s.turn;
+        if (botPickDecision(s, seat, lvl(seat))) { pick(s, seat); say(seat, 'pick'); }
+        else { pass(s); say(seat, 'pass', 0.25); }
         bump();
       } else if (s.phase === 'alldown') {
         g.note = 'Everyone passed: re-deal.'; // ponytail: leaster mode, add when the table wants it
+        say(1 + Math.floor(Math.random() * 4), 'redeal');
         g.s = newHand((s.dealer + 1) % 5); bump();
       } else if (s.phase === 'bury' && s.picker !== 0) {
-        const sb = botBuryChoice(s, lvl(s.picker));
-        buryAndCall(s, sb.bury, sb.calledSuit); bump();
+        const sb = botBuryChoice(s);
+        buryAndCall(s, sb.bury, sb.calledSuit);
+        if (!sb.calledSuit) say(s.picker, 'alone');
+        bump();
       } else if (s.phase === 'play' && currentTurn(s) !== 0) {
-        stepPlay(botPlay(s, currentTurn(s), lvl(currentTurn(s))), currentTurn(s)); bump();
+        const seat = currentTurn(s);
+        const adv = adviseMove(s, seat, lvl(seat));
+        // Talk only once team membership is PUBLIC (ace flipped or alone):
+        // the advice strings encode role knowledge, and a pre-flip "schmear"
+        // line would identify the hidden partner with certainty.
+        if (s.aceFlipped || s.alone) {
+          if (adv.why.includes('schmear')) say(seat, 'schmear', 0.4);
+          else if (adv.why.includes('Rule 26')) say(seat, 'trumphigh', 0.6);
+        }
+        stepPlay(adv.card, seat); bump();
       }
-    }, g.lastTrick ? 5000 : s.phase === 'play' ? 500 : 350);
+    }, g.lastTrick ? 5000 : s.phase === 'play' ? getSpeedPref() : 350);
     return () => clearTimeout(t);
   });
 
@@ -184,6 +209,17 @@ function Table({ onResult }) {
       s.counted = true;
       const r = s.result;
       r.delta.forEach((d, i) => { g.scores[i] += d; });
+      g.rows.push({
+        totals: [...g.scores], picker: s.picker,
+        partner: s.partner == null ? s.picker : s.partner,
+        dealer: s.dealer, stake: r.stake, bump: r.bump, win: r.win,
+      });
+      // one closing line: the picker crows or grumbles; if the picker is
+      // human, a bot defender gets the last word instead
+      const pool = [1, 2, 3, 4].filter(i => i !== s.partner);
+      const spokes = s.picker !== 0 ? s.picker : pool[Math.floor(Math.random() * pool.length)];
+      const onPickerSide = spokes === s.picker || spokes === s.partner;
+      say(spokes, onPickerSide === r.win ? 'win' : 'loss');
       onResult({ won: (s.picker === 0 || s.partner === 0) ? r.win : !r.win, delta: r.delta[0] });
     }
   }
@@ -198,19 +234,29 @@ function Table({ onResult }) {
   const roleBadge = seat =>
     seat === s.picker ? html`<span class="badge">picker</span>` :
     (s.aceFlipped && seat === s.partner) ? html`<span class="badge alt">partner</span>` : null;
+  const fmt = t => (t > 0 ? '+' + t : String(t));
+  const POS = ['me', 'l', 'tl', 'tr', 'r']; // seat index -> spot on the felt
 
   return html`<div class="table">
+    <button class="scorestrip" title="Tap for the full score sheet"
+      onClick=${() => { g.sheetOpen = true; bump(); }}>
+      ${[0, 1, 2, 3, 4].map(i => html`<span class="ss ${g.scores[i] > 0 ? 'pos' : g.scores[i] < 0 ? 'neg' : ''}">${seatName(i)} ${fmt(g.scores[i])}</span>`)}
+    </button>
     <${TableRing} onFeltTap=${g.lastTrick ? () => { g.lastTrick = null; bump(); } : null}
       opps=${[1, 2, 3, 4].map(seat => ({
-        name: seatName(seat), badges: roleBadge(seat), score: g.scores[seat],
+        name: seatName(seat), badges: roleBadge(seat),
         cards: s.hands[seat].length,
+        say: g.talk && g.talk.seat === seat ? g.talk.text : null,
         turn: (s.phase === 'play' && currentTurn(s) === seat && !g.lastTrick) || (s.phase === 'pick' && s.turn === seat),
       }))}>
-      ${s.calledSuit && html`<p class="callinfo">${seatName(s.picker)} picked · called ${SuitChip(s.calledSuit)}</p>`}
-      ${s.alone && html`<p class="callinfo">${seatName(s.picker)} is going alone</p>`}
-      ${g.note && s.trickNo === 0 && !s.calledSuit && html`<p class="callinfo">${g.note}</p>`}
-      <div class="trick">
-        ${trick.cards.map((c, i) => html`<div class="played ${trick.winner === trick.seats[i] ? 'won' : ''}">
+      ${(s.calledSuit || s.alone) && html`<div class="callcorner">
+        ${s.calledSuit
+          ? html`<span class="callsuit suit-${s.calledSuit}">A${GLYPH[s.calledSuit]}</span><span class="calltext">${seatName(s.picker)} called</span>`
+          : html`<span class="calltext">${seatName(s.picker)} alone</span>`}
+      </div>`}
+      ${g.note && s.phase === 'pick' && html`<p class="callinfo">${g.note}</p>`}
+      <div class="trick ring5">
+        ${trick.cards.map((c, i) => html`<div class="played pos-${POS[trick.seats[i]]} ${trick.winner === trick.seats[i] ? 'won' : ''}">
           <span class="who">${seatName(trick.seats[i])}</span><${Card} c=${c} toView=${toView} small />
         </div>`)}
       </div>
@@ -219,9 +265,26 @@ function Table({ onResult }) {
     <//>
 
     ${s.phase === 'done' && html`<div class="verdict ${s.result.win === (s.picker === 0 || s.partner === 0) ? 'good' : 'bad'}">
-      <b>${s.result.win ? 'Picker side wins' : 'Defenders win'} ${s.result.pickerPts}–${s.result.defPts}${s.result.stake > 1 ? ' · ' + (s.result.stake === 2 ? 'schneider!' : 'no-tricker!') : ''}</b>
-      <span class="call">${[0, 1, 2, 3, 4].map(i => `${seatName(i)} ${s.result.delta[i] > 0 ? '+' : ''}${s.result.delta[i]}`).join(' · ')}</span>
-      <button class="big" onClick=${() => { g.s = newHand((s.dealer + 1) % 5); g.buriedSel = []; g.note = ''; bump(); }}>Next hand</button>
+      <b>${s.result.win ? 'Picker side wins' : 'Defenders win'} ${s.result.pickerPts}–${s.result.defPts}${s.result.stake > 1 ? ' · ' + (s.result.stake === 2 ? 'no schneider! ×2' : 'no trick! ×3') : ''}${!s.result.win ? ' · bump ×2' : ''}</b>
+      <span class="call">${[0, 1, 2, 3, 4].map(i => `${seatName(i)} ${fmt(s.result.delta[i])}`).join(' · ')}</span>
+      <button class="big" onClick=${() => { g.s = newHand((s.dealer + 1) % 5); g.buriedSel = []; g.note = ''; g.lastTrick = null; g.talk = null; bump(); }}>Next hand</button>
+    </div>`}
+
+    ${g.sheetOpen && html`<div class="tour-backdrop" onClick=${() => { g.sheetOpen = false; bump(); }}>
+      <div class="tour-card sheetcard" onClick=${e => e.stopPropagation()}>
+        <h2>Score sheet</h2>
+        ${g.rows.length === 0 ? html`<p class="callinfo">No hands scored yet.</p>` : html`<div class="shsheet">
+          ${[0, 1, 2, 3, 4].map(i => html`<div class="shhead"><span class="nm">${seatName(i)}</span><span class="tot ${g.scores[i] > 0 ? 'pos' : g.scores[i] < 0 ? 'neg' : ''}">${fmt(g.scores[i])}</span></div>`)}
+          ${g.rows.map(r => [0, 1, 2, 3, 4].map(i => html`<div class="shcell">
+            ${r.dealer === i ? html`<span class="corner tr">D</span>` : null}
+            ${r.picker === i && r.stake * r.bump > 1 ? html`<span class="corner tl">×${r.stake * r.bump}</span>` : null}
+            ${fmt(r.totals[i])}
+            ${r.picker === i ? html`<span class="mark picker">${r.picker === r.partner ? 'P·A' : 'P'}</span>`
+              : r.partner === i ? html`<span class="mark partner">Pa</span>` : null}
+          </div>`))}
+        </div>`}
+        <button class="big" onClick=${() => { g.sheetOpen = false; bump(); }}>Close</button>
+      </div>
     </div>`}
 
     ${myTurnPick && html`<div class="btnrow">
@@ -250,7 +313,7 @@ function Table({ onResult }) {
       onLevel=${l => { g.pref = l; setLevelPref(l); g.seed = (g.seed + 1) % 3; bump(); }}
       onCoach=${on => { g.coach = on; setCoachPref(on); bump(); }} />
     <div class="me ${myPlay || myTurnPick || myBury ? 'turn' : ''}">
-      <span>You ${roleBadge(0) || ''}</span><span class="score">${g.scores[0]}</span>
+      <span>You ${roleBadge(0) || ''}</span>
       <span class="score">trick ${Math.min(s.trickNo + 1, 6)}/6</span>
     </div>
     <${Hand} cards=${human} toView=${toView} legal=${legal} selected=${g.buriedSel}
@@ -263,5 +326,5 @@ export const game = {
   id: 'sheepshead', name: 'Sheepshead', glyph: '🐑',
   tagline: 'The Wisconsin classic: pick, bury, call an ace.',
   toView, study: STUDY, drills: [pickDrill, buryDrill, leadDrill], Table,
-  studyNote: 'Distilled from pagat.com, sheepshead.org, playsheepshead.org, and the Wergin picking guidelines.',
+  studyNote: 'Plays by Strupp\'s "How to Play Winning 5 Handed Sheepshead" (the Milwaukee book); supplemented by pagat.com, sheepshead.org, and playsheepshead.org.',
 };

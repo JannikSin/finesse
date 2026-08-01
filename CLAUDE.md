@@ -3,7 +3,7 @@
 Static PWA, no build step, vanilla Preact + htm vendored (copied from tally; same
 CSP-hash import map). Teaches games; tally scores them. The two stay SEPARATE apps
 by council verdict (2026-07-29): one cross-link each way at most, no shared runtime
-code. Bridge was council-excluded but David vetoed: it is IN, as the app's most
+code. Bridge was council-excluded but the owner vetoed: it is IN, as the app's most
 significant training track.
 
 ## What it is
@@ -24,7 +24,7 @@ advanced strategy), and full play vs bots where built:
   the same system functions as the bots, streak dots in localStorage
   `finesse.bridge.learn`; hooks repeat on every graded answer, the bonmot
   pattern, and a matching `bridge` deck lives in the bonmot repo for FSRS);
-  SAYC per the ACBL booklet, opening threshold toggle 13+ (book) / 12+ (David's
+  SAYC per the ACBL booklet, opening threshold toggle 13+ (book) / 12+ (the house
   home game) via `setOpenMin`, pref `finesse.bridge.openmin`
 Routes: `#<game>` menu, `#<game>/<drillId>`, `#<game>/table`, `#<game>/study`,
 plus optional per-game `screens: { id: {title, hint, C} }` routed as
@@ -36,7 +36,7 @@ header comment of each study section / game file.
 - No real names anywhere in repo.
 - Zero `innerHTML` / `eval`. CSP pinned; import map byte-identical to tally's.
 - Zero runtime network calls beyond same-origin.
-- **sw.js activate cleanup must stay prefixed `finesse-`**: all of David's PWAs
+- **sw.js activate cleanup must stay prefixed `finesse-`**: all of this owner's PWAs
   share the janniksin.github.io origin, and an unprefixed cleanup evicts tally,
   bonmot and grandstand caches. Never remove that filter.
 - `vendor/` upgrade ritual: file + `vendor/VERSIONS.md` + `CACHE` bump, all or none.
@@ -52,27 +52,43 @@ header comment of each study section / game file.
   Trick-history recording (`s.history`) is public info bots may count from.
 - `app/games/<game>.coach.js` — heuristics + LEVELED bot policy, imports engine
   only (bridge: `bridge.bid.js`). Levels: novice (deliberate period-correct
-  mistakes) / solid (book) / expert (adds counting + inference). Each coach
-  exports `adviseMove(state, seat, level) -> {card, why}`: bots take the card,
+  mistakes) / solid (book) / expert (adds counting + inference). SHEEPSHEAD
+  EXCEPTION (house standing order 2026-08-01): every sheepshead level plays
+  by the Strupp book — levels differ only in DEPTH (novice = recap-card basics,
+  solid = Chapter II table rules, expert = counting/inference/end-position),
+  never in whether the book is followed. sheepshead.coach.js also exports TALK,
+  the table-talk line bank (original lines, tavern voice); the Table shows one
+  speech bubble at a time (picker always grumbles about the blind — which is
+  also why talk leaks zero hidden information). Each coach exports
+  `adviseMove(state, seat, level) -> {card, why}`: bots take the card,
   the human coach note shows both. HONESTY RULE (sheepshead): bots never read
   hidden team membership — knownSide() models what each seat can actually know;
   tests enforce it. Engines/coaches must never import htm/preact.
-- `app/cards.js` — also holds table prefs (bot level, coach mode, `finesse.level`
-  / `finesse.coach` in localStorage), TableControls and CoachNote widgets.
+- `app/cards.js` — also holds table prefs (bot level, coach mode, bot play speed;
+  `finesse.level` / `finesse.coach` / `finesse.speed` in localStorage),
+  TableControls (incl. the speed slider) and CoachNote widgets.
 - `tests/` — engine/games/bridge unit tests + `sim.test.mjs`: all-bot full-table
   simulations at every level (legality-checked every move) and seeded
-  skill-ladder assertions (expert beats novice in all five playable games).
-  `npm test` (70 tests).
+  skill-ladder assertions (expert beats novice in euchre/hearts/ohhell/bridge;
+  sheepshead asserts a DEPTH ladder instead — since all its levels play the
+  book, money margins are statistically zero, so the test asserts the deeper
+  rules fire only at the deeper levels). Plus a 200-hand book-proctor
+  invariant test and a hard-rules test (forbidden DOM sinks anywhere, sw.js
+  finesse- prefix + cacheName scoping). `npm test` (76 tests).
 
 ## Adding a game
 1. `<game>.engine.js` (pure) + `<game>.coach.js` (pure) + `<game>.js` (module).
 2. Register in `app/main.js` GAMES array.
-3. Add ALL new files to `sw.js` PRECACHE and bump `CACHE`.
+3. Add ALL new files to `sw.js` PRECACHE and bump `CACHE`. (Ordinary edits to
+   already-precached files ALSO need a `CACHE` bump before deploy: installed
+   clients re-fetch content only when the new sw.js installs a new cache.)
 4. Tests: full bot-vs-bot playout loop + rule edge cases + scoring.
 5. Study: leveled, from 2+ named strategy sources.
 
 ## Known ceilings (ponytail comments in code)
-- Sheepshead: all-pass re-deals (no leaster); bots know true teams pre-ace-flip.
+- Sheepshead: all-pass re-deals (no leaster); no crack/recrack (bump ×2 on
+  picker-side loss is automatic, schneider ×2 / no-trick ×3 per tally buckets);
+  session score sheet (tap the top score strip) is in-memory only, resets on leave.
 - Rook: no table (auction + kitty + discard loop unbuilt).
 - Bridge: engine has doubles/redoubles + full duplicate scoring (doubled,
   redoubled, vulnerability rotation with dealer); bots make takeout doubles,
@@ -80,9 +96,14 @@ header comment of each study section / game file.
   Remaining ceilings: no negative doubles, bots read every double as takeout
   and never redouble or double for penalty, no weak-two 2NT feature ask, no
   2/1 system toggle.
-- Wergin book (archive.org, borrow-only) pending David's login.
+- Wergin book (archive.org, borrow-only) pending an archive.org login. Optional now.
+- Strupp book ("How to Play Winning 5 Handed Sheepshead") is the PRIMARY
+  sheepshead strategy source (reference material kept privately, off-repo). The
+  coach's pick/bury/lead/play heuristics encode its rules in original wording;
+  rule numbers are cited in sheepshead.coach.js comments. sheepshead.org et al.
+  are secondary.
 
 ## Verify
-- `npm test` (70 tests)
+- `npm test` (76 tests)
 - `npx serve` at repo root; hard-refresh twice for sw.js.
 - Icons: `node tools/make-icons.mjs`.

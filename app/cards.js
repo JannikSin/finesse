@@ -25,7 +25,7 @@ export function Card({ c, toView, onClick, dim, sel, small }) {
 }
 
 // No visual tell on which cards are legal: every card looks the same, but a
-// tap on an illegal card silently does nothing (David's rule).
+// tap on an illegal card silently does nothing (house rule).
 export const Hand = ({ cards, toView, onPlay, legal, selected }) => html`<div class="hand">
   ${cards.map(c => html`<${Card} key=${c} c=${c} toView=${toView}
     onClick=${onPlay ? () => { if (!legal || legal.includes(c)) onPlay(c); } : null}
@@ -44,19 +44,36 @@ export const setLevelPref = l => localStorage.setItem('finesse.level', l);
 export const getCoachPref = () => localStorage.getItem('finesse.coach') !== 'off';
 export const setCoachPref = on => localStorage.setItem('finesse.coach', on ? 'on' : 'off');
 
+// Bot play speed: ms of pause between bot plays. Games read this fresh on
+// every timeout, so the slider needs no prop-threading through the tables.
+export const getSpeedPref = () => {
+  const v = Number(localStorage.getItem('finesse.speed'));
+  return v >= 200 && v <= 2500 ? v : 900; // bounds match the slider exactly
+};
+export const setSpeedPref = v => localStorage.setItem('finesse.speed', String(v));
+
 // 'mixed' seats a table of different players; assignment fixed per session seed.
 export const levelForSeat = (pref, seat, seed = 0) =>
   pref === 'mixed' ? ['novice', 'solid', 'expert'][(seat * 7 + seed) % 3] : pref;
 
 // Collapsed to a single gear by default so nothing sits over the table
-// (David's rule). Settings persist, so most sessions never open it.
+// (house rule). Settings persist, so most sessions never open it.
 export function TableControls({ pref, coach, onLevel, onCoach }) {
   const [open, setOpen] = useState(false);
+  const [speed, setSpeed] = useState(getSpeedPref());
   return html`<div class="controls">
     ${open && html`<div class="btnrow wrap controls-row">
       <span class="scene">Bots:</span>
       ${BOT_LEVELS.map(l => html`<button class="hint ${pref === l ? 'on' : ''}" onClick=${() => onLevel(l)}>${l}</button>`)}
       <button class="hint ${coach ? 'on' : ''}" onClick=${() => onCoach(!coach)}>coach ${coach ? 'on' : 'off'}</button>
+    </div>`}
+    ${open && html`<div class="btnrow wrap controls-row speedrow">
+      <span class="scene">Bot speed:</span>
+      <span class="scene">fast</span>
+      <input type="range" min="200" max="2500" step="100" value=${speed}
+        aria-label="pause between bot plays"
+        onInput=${e => { const v = Number(e.target.value); setSpeed(v); setSpeedPref(v); }} />
+      <span class="scene">slow · ${(speed / 1000).toFixed(1)}s pause</span>
     </div>`}
     <button class="hint gear" title="Table settings: bot strength and coach"
       onClick=${() => setOpen(!open)}>${open ? '✕ close settings' : '⚙'}</button>
@@ -83,6 +100,7 @@ export function TableRing({ opps, onFeltTap, children }) {
   const areas = RING_AREAS[opps.length] || RING_AREAS[3];
   return html`<div class="ring n${opps.length}">
     ${opps.map((o, i) => html`<div class="seat seat-${areas[i]} ${o.turn ? 'turn' : ''}" key=${o.name}>
+      ${o.say ? html`<span class="bubble">${o.say}</span>` : ''}
       <span class="oppname">${o.name}${o.badges || ''}${o.score !== undefined ? html`<span class="score"> ${o.score}</span>` : ''}</span>
       <div class="backs">${Array.from({ length: o.cards }, (_, k) => html`<span class="cardback" key=${k} />`)}</div>
     </div>`)}

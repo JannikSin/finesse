@@ -10,14 +10,18 @@ import { game as rook } from './games/rook.js';
 import { game as bridge } from './games/bridge.js';
 
 const GAMES = [sheepshead, euchre, hearts, ohhell, rook, bridge];
-const byId = Object.fromEntries(GAMES.map(g => [g.id, g]));
+// null-prototype maps: a crafted hash like #constructor must not hit Object.prototype
+const byId = Object.assign(Object.create(null), Object.fromEntries(GAMES.map(g => [g.id, g])));
 
 // ---- persistence -----------------------------------------------------------
 const KEY = 'finesse.v1';
 function loadStats() {
   try {
     const cur = JSON.parse(localStorage.getItem(KEY));
-    if (cur && cur.games) return cur;
+    // shape-check: corrupt/hostile storage must not white-screen the app
+    if (cur && typeof cur.games === 'object' && cur.games !== null) {
+      return { games: cur.games, table: (typeof cur.table === 'object' && cur.table) || {} };
+    }
   } catch { /* fall through */ }
   const fresh = { games: {}, table: {} };
   try {
@@ -92,7 +96,7 @@ function Tour({ onDone }) {
 }
 
 // ---- shell -----------------------------------------------------------------
-const LEGACY = { pick: 'sheepshead/pick', lead: 'sheepshead/lead', table: 'sheepshead/table', study: 'sheepshead/study' };
+const LEGACY = Object.assign(Object.create(null), { pick: 'sheepshead/pick', lead: 'sheepshead/lead', table: 'sheepshead/table', study: 'sheepshead/study' });
 
 function route() {
   let h = location.hash.slice(1);
@@ -117,7 +121,7 @@ function App() {
     : !mode ? g.name
     : mode === 'table' ? `${g.name} · At the Table`
     : mode === 'study' ? `${g.name} · Study`
-    : g.screens && g.screens[mode] ? `${g.name} · ${g.screens[mode].title}`
+    : g.screens && Object.hasOwn(g.screens, mode) ? `${g.name} · ${g.screens[mode].title}`
     : `${g.name} · ${(g.drills.find(d => d.id === mode) || {}).title || g.name}`;
   const endTour = () => { localStorage.setItem('finesse.tour', 'done'); setTour(false); };
   return html`<div class="shell">
@@ -135,7 +139,7 @@ function App() {
           t.hands++; if (r.won) t.won++; t.score += r.delta || 0;
           saveStats();
         }} key=${g.id} />`
-      : g.screens && g.screens[mode] ? html`<${g.screens[mode].C} onResult=${r => {
+      : g.screens && Object.hasOwn(g.screens, mode) ? html`<${g.screens[mode].C} onResult=${r => {
           const st = drillStats(g.id, mode);
           st.total++; if (r.right) { st.right++; st.streak++; } else st.streak = 0;
           saveStats();

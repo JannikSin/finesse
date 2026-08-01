@@ -55,16 +55,90 @@ for (const level of ['novice', 'solid', 'expert']) {
   });
 }
 
-test('sheepshead skill ladder: expert seat profits off a novice table', () => {
-  const rng = mulberry32(42);
-  let expertTotal = 0, hands = 0;
-  const levels = ['expert', 'novice', 'novice', 'novice', 'novice'];
-  for (let n = 0; n < 500; n++) {
-    const delta = sheepsheadHand(levels, n % 5, rng);
-    if (delta) { expertTotal += delta[0]; hands++; }
+// Since every level plays by the book (house standing order), the levels no
+// longer differ enough in MONEY to assert a per-seat profit — measured over
+// 20k deals the expert-vs-novice edge is statistically zero. What the levels
+// DO differ in is depth: the deeper rules must actually fire for the deeper
+// levels and never for the shallow one. That is the honest ladder.
+test('sheepshead depth ladder: deeper book rules fire only at deeper levels', () => {
+  const fired = { novice: new Set(), solid: new Set(), expert: new Set() };
+  for (const level of ['novice', 'solid', 'expert']) {
+    const rng = mulberry32(42);
+    for (let n = 0; n < 300; n++) {
+      const s = SH.newHand(n % 5, rng);
+      while (s.phase === 'pick') {
+        if (SHC.botPickDecision(s, s.turn, level)) SH.pick(s, s.turn); else SH.pass(s);
+      }
+      if (s.phase === 'alldown') continue;
+      const sb = SHC.botBuryChoice(s);
+      SH.buryAndCall(s, sb.bury, sb.calledSuit);
+      while (s.phase === 'play') {
+        const seat = SH.currentTurn(s);
+        const adv = SHC.adviseMove(s, seat, level);
+        if (adv.why.includes('Trump has been pulled twice')) fired[level].add('send-called-suit');
+        if (adv.why.includes('Rule 31')) fired[level].add('duck-trump-lead');
+        if (adv.why.includes('Rule 26')) fired[level].add('trump-high');
+        if (adv.why.includes('boss trump')) fired[level].add('boss-lead');
+        if (adv.why.includes('Take it from the picker')) fired[level].add('end-position');
+        SH.playCard(s, seat, adv.card);
+      }
+    }
   }
-  assert.ok(hands > 300, 'enough hands played');
-  assert.ok(expertTotal > 0, `expert should be up over ${hands} hands, got ${expertTotal}`);
+  // novice: recap-card basics only — none of the deeper rules
+  assert.deepEqual([...fired.novice], [], 'novice stays on the recap card');
+  // solid: the Chapter II table rules fire, the counting rules do not
+  for (const r of ['send-called-suit', 'duck-trump-lead', 'trump-high']) {
+    assert.ok(fired.solid.has(r), `solid fires ${r}`);
+  }
+  assert.ok(!fired.solid.has('boss-lead') && !fired.solid.has('end-position'), 'solid does not count');
+  // expert: everything, including the counting rules
+  for (const r of ['send-called-suit', 'duck-trump-lead', 'trump-high', 'boss-lead']) {
+    assert.ok(fired.expert.has(r), `expert fires ${r}`);
+  }
+});
+
+test('sheepshead proctor: no bot breaks a hard book rule over 200 hands', () => {
+  // Hard invariants at every level: never play over a winning teammate when a
+  // duck exists (fat A/T/K schmears excepted), never miss a last-trick schmear
+  // onto a teammate's won trick, defenders never lead trump holding fail.
+  const rng = mulberry32(7);
+  const levels = ['expert', 'solid', 'novice', 'solid', 'expert'];
+  const flags = [];
+  for (let n = 0; n < 200; n++) {
+    const s = SH.newHand(n % 5, rng);
+    while (s.phase === 'pick') {
+      if (SHC.botPickDecision(s, s.turn, levels[s.turn])) SH.pick(s, s.turn); else SH.pass(s);
+    }
+    if (s.phase === 'alldown') continue;
+    const sb = SHC.botBuryChoice(s);
+    SH.buryAndCall(s, sb.bury, sb.calledSuit);
+    while (s.phase === 'play') {
+      const seat = SH.currentTurn(s);
+      const level = levels[seat];
+      const legal = SH.legalMoves(s, seat);
+      const card = SHC.adviseMove(s, seat, level).card;
+      if (legal.length > 1 && s.trick.length > 0) {
+        const winIdx = SH.trickWinner(s.trick);
+        const winnerSeat = s.trickSeats[winIdx];
+        const winCard = s.trick[winIdx];
+        const side = SHC.knownSide(s, seat, winnerSeat, level);
+        const last = s.trick.length === 4;
+        if (side === 'mate') {
+          const wouldWin = SH.beats(winCard, card);
+          const hadDuck = legal.some(c => !SH.beats(winCard, c));
+          const fatSchmear = SH.points(card) >= 4 && card[0] !== 'Q' && card[0] !== 'J';
+          const endPos = level === 'expert' && winnerSeat === s.picker && s.trickNo === 3 && last && (s.picker + 1) % 5 === seat;
+          if (wouldWin && hadDuck && !fatSchmear && !endPos) flags.push(['over-partner', level, card, winCard]);
+          const fatHeld = legal.filter(c => c[0] !== 'Q' && c[0] !== 'J' && SH.points(c) >= 4);
+          if (last && fatHeld.length && !fatHeld.includes(card) && !endPos) flags.push(['missed-schmear', level, card]);
+        }
+      } else if (legal.length > 1 && s.trick.length === 0 && seat !== s.picker && seat !== s.partner) {
+        if (SH.isTrump(card) && !s.hands[seat].every(SH.isTrump)) flags.push(['defender-trump-lead', level, card]);
+      }
+      SH.playCard(s, seat, card);
+    }
+  }
+  assert.deepEqual(flags, [], `book violations: ${JSON.stringify(flags.slice(0, 5))}`);
 });
 
 test('sheepshead honesty: no bot reads the hidden partner before the ace flips', () => {

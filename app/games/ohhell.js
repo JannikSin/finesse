@@ -3,7 +3,7 @@ import { html } from 'htm/preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
 import {
   Card, Hand, SuitChip, GLYPH, rankLabel, frenchView,
-  getLevelPref, setLevelPref, getCoachPref, setCoachPref, levelForSeat,
+  getLevelPref, setLevelPref, getCoachPref, setCoachPref, getSpeedPref, levelForSeat,
   TableControls, CoachNote, TableRing,
 } from '../cards.js';
 import {
@@ -81,7 +81,7 @@ function Table({ onResult }) {
       else if (s.phase === 'play' && currentTurn(s) !== 0) {
         playCard(s, currentTurn(s), botPlay(s, currentTurn(s), lvl(currentTurn(s)))); afterPlay(); bump();
       }
-    }, g.showTrick ? 5000 : 400);
+    }, g.showTrick ? 5000 : getSpeedPref());
     return () => clearTimeout(t);
   });
 

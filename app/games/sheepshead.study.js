@@ -1,8 +1,21 @@
-// Sheepshead study, leveled. Sources: sheepshead.org (Advanced Play + Ten
-// Commandments), sheepsheadrules.com, playsheepshead.org, pagat.com.
-// Plain data, no imports.
+// Sheepshead study, leveled. PRIMARY source: Strupp, "How to Play 'Winning'
+// 5 Handed Sheepshead" (Milwaukee school; the coach plays by its rules).
+// Secondary: sheepshead.org (Advanced Play + Ten Commandments),
+// sheepsheadrules.com, playsheepshead.org, pagat.com. Plain data, no imports.
 
 export const STUDY = [
+  {
+    title: 'The Strupp rules · the house doctrine',
+    body: [
+      'This table plays by the Milwaukee book. Its core, in one breath: the picker leads trump; the partner leads trump (small, unless holding Q♣); the opposition leads the called suit; nobody plays over a winning teammate.',
+      'When in doubt, pick. When in doubt, schmear. Do not mauer (pass a pickable hand).',
+      'Schmear fodder is aces, tens, kings. Queens and jacks are power, not points: never throw one onto a won trick.',
+      'Hold the called suit until trump has been pulled, then send it through: the ace walks home.',
+      'Trumping a fail trick as a defender: trump HIGH ("send a man"). It forces out the picker\'s big trump, which would have beaten your high trump on a trump lead anyway.',
+      'On a trump lead, second and third hand duck low; fourth and fifth hand overtrump.',
+      'Count the 14 trump and count points as the hand goes: play every hand to its maximum.',
+    ],
+  },
   {
     title: 'Level 1 · The deck and trump',
     body: [
@@ -66,6 +79,7 @@ export const STUDY = [
   {
     title: 'Level 3 · Cracking, leasters, and table craft',
     body: [
+      'Heads up: this table plays neither cracks nor leasters yet (all-pass hands re-deal; losses always pay the bump). This section is for your real-life games.',
       'Cracking (doubling the hand as a defender): crack when your win chance beats ONE IN THREE. The math: a third of +4 beats two-thirds of -2. Do not wait for sure things.',
       'Re-crack as picker only with 20+ points safely buried or secured.',
       'Leaster play inverts everything: voids become liabilities, high trump you cannot shed is a trap, and the last trick often takes the blind. Dump points onto tricks others must win.',
