@@ -381,3 +381,45 @@ details.conv .btnrow { align-items: center; gap: 12px; }
   .me.turn::before { content: '▶'; }
   button.big { padding: 13px 22px; }
 }
+
+/* bidding box: Pass/Dbl/Rdbl, then level, then strain */
+.bidbox { padding: 4px 0; }
+.bidbox .btnrow { padding: 4px 0; }
+.bidbox .lvl {
+  width: 52px; min-width: 52px; padding: 10px 0; text-align: center;
+  font-family: JBMono, monospace; font-weight: 700; font-size: 1.1rem; margin-left: 0;
+}
+.bidbox .lvl:disabled { opacity: 0.25; }
+.bidbox .strain {
+  background: var(--card); color: var(--ink); border-color: #c9c4b8;
+  font-family: JBMono, monospace; font-weight: 700; font-size: 1.05rem;
+  min-width: 62px; margin-left: 0;
+}
+.bidbox .strain.red { color: var(--red); }
+.bidbox .strain:disabled { opacity: 0.3; }
+.bidbox .undo { border-style: dashed; margin-left: auto; }
+button.hint.peek { opacity: 0.8; }
+
+/* auction grid: the scoresheet */
+.auctiongrid {
+  width: 100%; max-width: 380px; margin: 4px auto; border-collapse: collapse;
+  font-size: 0.95rem;
+}
+.auctiongrid th {
+  color: var(--chalk-dim); font-weight: 550; font-size: 0.8rem;
+  text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18); text-align: center;
+}
+.auctiongrid th.you { color: var(--brass); }
+.auctiongrid td {
+  text-align: center; padding: 3px 6px; font-family: JBMono, monospace;
+  color: var(--chalk); width: 25%;
+}
+.auctiongrid td.quiet { color: var(--chalk-dim); opacity: 0.55; font-family: Bricolage, sans-serif; font-size: 0.85rem; }
+.auctiongrid td.ask { color: var(--brass); font-weight: 700; animation: askpulse 1.2s ease-in-out infinite; }
+@keyframes askpulse { 50% { opacity: 0.4; } }
+@media (prefers-reduced-motion: reduce) { .auctiongrid td.ask { animation: none; } }
+
+/* coach-after verdict note */
+.coachnote.off { background: rgba(140, 58, 50, 0.18); border-color: rgba(179, 56, 46, 0.6); }
+.verdict .diverge { color: var(--chalk); }

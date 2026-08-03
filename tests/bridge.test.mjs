@@ -317,3 +317,33 @@ test('bridge: vulnerability rotation breaks the dealer lockstep', () => {
   }
   for (let d = 0; d < 4; d++) assert.equal(seen[d].size, 4, `dealer ${d} sees all four vuls`);
 });
+
+test('bridge: miss queue transform (owed hands, cap, dedupe, review)', async () => {
+  const { settleMissQueue, practiceScene } = await import('../app/games/bridge.learn.js');
+  const mk = n => ({ hand: ['A' + 'SHDC'[n % 4], String(n)], strip: [], prompt: 'p', choices: [{ id: 'P', label: 'Pass' }], answer: 'P', why: 'w' });
+  // wrong first try: queued once, deduped
+  let q = settleMissQueue([], mk(1), false);
+  assert.equal(q.length, 1);
+  q = settleMissQueue(q, mk(1), false);
+  assert.equal(q.length, 1, 'same hand not queued twice');
+  // right first try: nothing queued
+  assert.equal(settleMissQueue([], mk(2), true).length, 0);
+  // cap at 10
+  q = [];
+  for (let i = 0; i < 15; i++) q = settleMissQueue(q, mk(i * 7 + 3), false);
+  assert.equal(q.length, 10);
+  // correct review clears the head
+  const head = q[0];
+  const cleared = settleMissQueue(q, { ...head, review: true }, true);
+  assert.equal(cleared.length, 9);
+  assert.ok(!cleared.some(s => s.hand.join('') === head.hand.join('')));
+  // wrong review rotates to the back, keeps length
+  const rotated = settleMissQueue(cleared, { ...cleared[0], review: true }, false);
+  assert.equal(rotated.length, 9);
+  assert.equal(rotated[rotated.length - 1].hand.join(''), cleared[0].hand.join(''));
+  // real scenes serialize clean (no htm nodes)
+  const s = practiceScene('stayman');
+  const roundtrip = JSON.parse(JSON.stringify(settleMissQueue([], s, false)));
+  assert.equal(roundtrip.length, 1);
+  assert.equal(typeof roundtrip[0].prompt, 'string');
+});

@@ -9,7 +9,7 @@ import {
 } from '../cards.js';
 import {
   deal, hcp, newAuction, legalCalls, makeCall, currentTurn,
-  legalMoves, playCard, isBid, bidRank, vulForBoard,
+  legalMoves, playCard, isBid, bidRank, vulForBoard, STRAINS,
 } from './bridge.engine.js';
 import {
   openingBid, responseTo, staymanReply, transferReply, blackwoodReply,
@@ -18,7 +18,7 @@ import {
 } from './bridge.bid.js';
 import { STUDY } from './bridge.study.js';
 import { CONVENTIONS, QUIZ, SPINE } from './bridge.conventions.js';
-import { practiceScene, PRACTICE_IDS } from './bridge.learn.js';
+import { practiceScene, PRACTICE_IDS, settleMissQueue } from './bridge.learn.js';
 
 // Opening threshold pref: 13 = book SAYC, 12 = the house game.
 const OPEN_KEY = 'finesse.bridge.openmin';
@@ -29,14 +29,58 @@ const toView = c => frenchView(c, () => false);
 const cardLabel = c => `${rankLabel(c[0])}${GLYPH[c[1]]}`;
 const contractStr = c => `${callLabel(c.bid)}${c.dbl === 2 ? ' ××' : c.dbl === 1 ? ' ×' : ''}`;
 const vulStr = v => (v === 'none' ? 'nobody vul' : v === 'both' ? 'both vul' : v === 'ns' ? 'we are vul' : 'they are vul');
-// Pass/Double/Redouble first, then every legal bid: the full bidding box.
-const CallButtons = ({ a, onCall }) => {
+// The bidding box, like the plastic one: Pass/Dbl/Rdbl on top, then pick a
+// LEVEL, then a STRAIN. Two taps instead of hunting a 35-button wall.
+const STRAIN_VIEW = { C: ['♣', 'black'], D: ['♦', 'red'], H: ['♥', 'red'], S: ['♠', 'black'], N: ['NT', 'black'] };
+function BidBox({ a, onCall, onUndo, canUndo }) {
+  const [lvl, setLvl] = useState(null);
   const lc = legalCalls(a);
-  return html`<div class="btnrow wrap">
-    ${[...lc.filter(c => !isBid(c)), ...lc.filter(isBid)].map(b =>
-      html`<button class="hint ${!isBid(b) ? 'callword' : ''}" onClick=${() => onCall(b)}>${b === 'X' ? 'Dbl' : b === 'XX' ? 'Rdbl' : callLabel(b)}</button>`)}
+  const words = lc.filter(c => !isBid(c));
+  const legalLevel = l => STRAINS.some(st => lc.includes(`${l}${st}`));
+  const pick = call => { setLvl(null); onCall(call); };
+  return html`<div class="bidbox">
+    <div class="btnrow wrap">
+      ${words.map(b => html`<button class="hint callword" onClick=${() => pick(b)}>${b === 'P' ? 'Pass' : b === 'X' ? 'Dbl' : 'Rdbl'}</button>`)}
+      ${canUndo && html`<button class="hint undo" onClick=${() => { setLvl(null); onUndo(); }}>↩ Undo</button>`}
+    </div>
+    <div class="btnrow wrap">
+      ${[1, 2, 3, 4, 5, 6, 7].map(l => html`<button class="hint lvl ${lvl === l ? 'on' : ''}"
+        disabled=${!legalLevel(l)} onClick=${() => setLvl(lvl === l ? null : l)}>${l}</button>`)}
+    </div>
+    ${lvl !== null && html`<div class="btnrow wrap">
+      ${STRAINS.map(st => {
+        const call = `${lvl}${st}`;
+        const [glyph, tone] = STRAIN_VIEW[st];
+        return html`<button class="hint strain ${tone}" disabled=${!lc.includes(call)}
+          onClick=${() => pick(call)}>${lvl}${glyph}</button>`;
+      })}
+    </div>`}
   </div>`;
-};
+}
+
+// The auction as a real scoresheet: W N E S columns, one row per round.
+const GRID_ORDER = [1, 2, 3, 0]; // W N E S in our seat numbering
+function AuctionGrid({ a }) {
+  const cells = [];
+  for (let i = 0; i < GRID_ORDER.indexOf(a.dealer); i++) cells.push(null);
+  a.calls.forEach(c => cells.push(c));
+  if (a.phase === 'auction') cells.push('?');
+  while (cells.length % 4) cells.push('');
+  const rows = [];
+  for (let i = 0; i < cells.length; i += 4) rows.push(cells.slice(i, i + 4));
+  const cell = c => (c === null || c === '' ? '' : c === '?' ? '?' : c === 'P' ? 'Pass' : c === 'X' ? 'Dbl' : c === 'XX' ? 'Rdbl' : callLabel(c));
+  return html`<table class="auctiongrid"><thead><tr>
+    ${GRID_ORDER.map(s => html`<th class=${s === 0 ? 'you' : ''}>${NAMES[s]}</th>`)}
+  </tr></thead><tbody>
+    ${rows.map(r => html`<tr>${r.map(c => html`<td class="${c === '?' ? 'ask' : ''} ${c === 'P' ? 'quiet' : ''} ${c && c !== 'P' && c !== '?' ? 'live' : ''}">${cell(c)}</td>`)}</tr>`)}
+  </tbody></table>`;
+}
+
+// Coach that grades AFTER you act (retrieval practice, not answer-reading):
+// verdict for your last call, and a peek button for the deliberate hint.
+const AfterNote = ({ last }) => (last ? html`<p class="coachnote ${last.call === last.sys ? '' : 'off'}">
+  ${last.call === last.sys ? '✓' : '✗'} You: ${callLabel(last.call)} · Book: ${callLabel(last.sys)}. ${last.why}
+</p>` : '');
 
 const BID_CHOICES = ['P', '1C', '1D', '1H', '1S', '1N', '2C', '2D', '2H', '2S', '2N', '3C', '3D', '3H', '3S', '3N', '4H', '4S'];
 const choicesFrom = (over) => BID_CHOICES
@@ -192,12 +236,32 @@ function Table({ onResult }) {
     ref.current = {
       a: newAuction(0, deal(), vulForBoard(0)), dealer: 0, board: 0, scores: [0, 0], showTrick: null,
       pref: getLevelPref(), coach: getCoachPref(), seed: 0,
+      myCalls: [], lastAdvice: null, peek: false,
     };
   }
   const g = ref.current;
   const a = g.a;
   const bump = () => redraw(n => n + 1);
   const lvl = seat => levelForSeat(g.pref, seat, g.seed);
+
+  const freshDeal = () => {
+    g.dealer = (g.dealer + 1) % 4; g.board++;
+    g.a = newAuction(g.dealer, deal(), vulForBoard(g.board));
+    g.myCalls = []; g.lastAdvice = null; g.peek = false;
+  };
+  const callAs = b => {
+    const adv = adviseCall(a, 0);
+    g.lastAdvice = { call: b, sys: adv.call, why: adv.why };
+    g.myCalls.push(a.calls.length);
+    g.peek = false;
+    makeCall(a, 0, b); bump();
+  };
+  const undoCall = () => {
+    const n = g.myCalls.pop();
+    const b = newAuction(a.dealer, a.hands, a.vul);
+    for (let i = 0; i < n; i++) makeCall(b, b.turn, a.calls[i]);
+    g.a = b; g.lastAdvice = null; g.peek = false; bump();
+  };
 
   const declSide = a.contract ? a.contract.declarer % 2 : null;
   const iControl = seat => seat === 0 || (a.contract && a.contract.declarer === 0 && seat === 2);
@@ -219,10 +283,7 @@ function Table({ onResult }) {
     const t = setTimeout(() => {
       if (g.showTrick) { g.showTrick = null; bump(); return; }
       if (a.phase === 'auction' && a.turn !== 0) { makeCall(a, a.turn, botCall(a, a.turn, lvl(a.turn))); bump(); }
-      else if (a.phase === 'passout') {
-        g.dealer = (g.dealer + 1) % 4; g.board++;
-        g.a = newAuction(g.dealer, deal(), vulForBoard(g.board)); bump();
-      }
+      else if (a.phase === 'passout') { freshDeal(); bump(); }
       else if (a.phase === 'play') {
         const seat = currentTurn(a);
         const humanTurn = seat === 0 ? !humanIsDummy : (seat === 2 && a.contract.declarer === 0);
@@ -238,7 +299,6 @@ function Table({ onResult }) {
     ((seatToPlay === 0 && !humanIsDummy) || (seatToPlay === 2 && a.contract.declarer === 0)) ? seatToPlay : null;
   const legal = myPlaySeat !== null ? legalMoves(a, myPlaySeat) : null;
   const trick = g.showTrick || { cards: a.trick || [], seats: a.trickSeats || [], winner: null };
-  const auctionLine = a.calls.map((c, i) => `${NAMES[(a.dealer + i) % 4]} ${callLabel(c)}`).join(' · ');
   const showDummy = a.phase !== 'auction' && a.contract && (a.trickNo > 0 || a.trick.length > 0 || a.phase === 'done');
   const dummySeat = a.contract ? a.dummy : null;
 
@@ -252,7 +312,10 @@ function Table({ onResult }) {
       }))}>
       <p class="callinfo">We ${g.scores[0]} · They ${g.scores[1]} · ${vulStr(a.vul)}
         ${a.contract ? html` · contract <b>${contractStr(a.contract)}</b> by ${NAMES[a.contract.declarer]} · tricks ${a.tricksDecl}/${6 + a.contract.level}` : ''}</p>
-      ${a.phase === 'auction' && html`<p class="callinfo">${auctionLine || (a.dealer === 0 ? 'You deal.' : `${NAMES[a.dealer]} deals.`)}${a.turn !== 0 ? ` · ${NAMES[a.turn]} thinking…` : ''}</p>`}
+      ${(a.phase === 'auction' || (a.contract && a.calls.length > 0)) && html`<div>
+        <${AuctionGrid} a=${a} />
+        ${a.phase === 'auction' && html`<p class="callinfo">${a.calls.length === 0 ? (a.dealer === 0 ? 'You deal.' : `${NAMES[a.dealer]} deals.`) : a.turn !== 0 ? `${NAMES[a.turn]} thinking…` : ''}</p>`}
+      </div>`}
       ${showDummy && dummySeat !== 0 && html`<div>
         <p class="callinfo">${NAMES[dummySeat]}'s dummy${a.contract.declarer === 0 ? ' (you play these too)' : ''}</p>
         <${Hand} cards=${a.hands[dummySeat]} toView=${toView}
@@ -270,19 +333,18 @@ function Table({ onResult }) {
     ${a.phase === 'done' && html`<div class="verdict ${(a.result.score > 0) === (declSide === 0) ? 'good' : 'bad'}">
       <b>${contractStr(a.contract)} by ${NAMES[a.contract.declarer]}: ${a.result.made ? `made ${a.result.tricksTaken - 6 - a.contract.level > 0 ? '+' + (a.result.tricksTaken - 6 - a.contract.level) : 'exactly'}` : `down ${6 + a.contract.level - a.result.tricksTaken}`} · ${a.result.score > 0 ? '+' : ''}${a.result.score}${a.result.game ? ' · GAME bonus' : ''}${a.contract.vul ? ' · vul' : ''}</b>
       <span class="call">We ${g.scores[0]} · They ${g.scores[1]}</span>
-      <button class="big" onClick=${() => {
-        g.dealer = (g.dealer + 1) % 4; g.board++;
-        g.a = newAuction(g.dealer, deal(), vulForBoard(g.board)); bump();
-      }}>Next deal</button>
+      <button class="big" onClick=${() => { freshDeal(); bump(); }}>Next deal</button>
     </div>`}
 
-    ${myCall && html`<${CallButtons} a=${a} onCall=${b => { makeCall(a, 0, b); bump(); }} />`}
+    ${myCall && html`<${BidBox} a=${a} onCall=${callAs} onUndo=${undoCall} canUndo=${g.myCalls.length > 0} />`}
     ${humanIsDummy && a.phase === 'play' && html`<p class="scene">You are dummy: ${NAMES[a.contract.declarer]} plays both hands. Watch and learn.</p>`}
 
-    ${myCall && g.coach && (() => {
+    ${myCall && g.coach && !g.peek && html`<button class="hint peek" onClick=${() => { g.peek = true; bump(); }}>💡 hint</button>`}
+    ${myCall && g.coach && g.peek && (() => {
       const adv = adviseCall(a, 0);
       return html`<${CoachNote} text=${`SAYC: ${callLabel(adv.call)}. ${adv.why}`} />`;
     })()}
+    ${a.phase === 'auction' && g.coach && html`<${AfterNote} last=${g.lastAdvice} />`}
     ${myPlaySeat !== null && g.coach && (() => {
       const adv = adviseMove(a, myPlaySeat, 'expert');
       return html`<${CoachNote} text=${`${myPlaySeat === 2 ? 'Dummy: ' : ''}${rankLabel(adv.card[0])}${GLYPH[adv.card[1]]}: ${adv.why}`} />`;
@@ -323,7 +385,11 @@ function Auction({ onResult }) {
   const [, redraw] = useState(0);
   const ref = useRef(null);
   if (!ref.current) {
-    ref.current = { a: newAuction(0, deal(), vulForBoard(0)), dealer: 0, board: 0, coach: getCoachPref(), matched: 0, hands: 0 };
+    ref.current = {
+      a: newAuction(0, deal(), vulForBoard(0)), dealer: 0, board: 0,
+      coach: getCoachPref(), matched: 0, hands: 0,
+      myCalls: [], record: [], lastAdvice: null, peek: false,
+    };
   }
   const g = ref.current;
   const a = g.a;
@@ -334,8 +400,10 @@ function Auction({ onResult }) {
     a.judged = true;
     a.sys = systemAuction(a.dealer, a.hands, a.vul);
     a.match = sameLanding(a, a.sys);
-    g.hands++; if (a.match) g.matched++;
-    onResult({ right: a.match });
+    if (!a.retry) {
+      g.hands++; if (a.match) g.matched++;
+      onResult({ right: a.match });
+    }
   }
 
   useEffect(() => {
@@ -345,11 +413,35 @@ function Auction({ onResult }) {
   });
 
   const myCall = a.phase === 'auction' && a.turn === 0;
+  const callAs = b => {
+    const adv = adviseCall(a, 0);
+    g.lastAdvice = { call: b, sys: adv.call, why: adv.why };
+    g.record.push(g.lastAdvice);
+    g.myCalls.push(a.calls.length);
+    g.peek = false;
+    makeCall(a, 0, b); bump();
+  };
+  const undoCall = () => {
+    const n = g.myCalls.pop();
+    const b = newAuction(a.dealer, a.hands, a.vul);
+    for (let i = 0; i < n; i++) makeCall(b, b.turn, a.calls[i]);
+    if (a.retry) b.retry = true;
+    g.a = b; g.record.pop(); g.lastAdvice = null; g.peek = false; bump();
+  };
+  const reset = () => { g.myCalls = []; g.record = []; g.lastAdvice = null; g.peek = false; };
   const next = () => {
     g.dealer = (g.dealer + 1) % 4; g.board++;
     g.a = newAuction(g.dealer, deal(), vulForBoard(g.board));
-    bump();
+    reset(); bump();
   };
+  const again = () => {
+    const old = a;
+    g.a = newAuction(old.dealer, old.hands, old.vul);
+    g.a.retry = true;
+    reset(); bump();
+  };
+  const div = g.record.find(r => r.call !== r.sys);
+  const divIdx = div ? g.record.indexOf(div) : -1;
 
   return html`<div class="table">
     <${TableRing} opps=${[1, 2, 3].map(seat => ({
@@ -357,28 +449,34 @@ function Auction({ onResult }) {
       cards: over ? 0 : 13,
       turn: a.phase === 'auction' && a.turn === seat,
     }))}>
-      <p class="callinfo">Bidding only: the play is imagined, the contract is graded. Bots bid the book. · ${vulStr(a.vul)}</p>
-      <p class="callinfo">${auctionLineOf(a) || (a.dealer === 0 ? 'You deal.' : `${NAMES[a.dealer]} deals.`)}${!over && a.turn !== 0 ? ` · ${NAMES[a.turn]} thinking…` : ''}</p>
+      <p class="callinfo">Bidding only: the play is imagined, the contract is graded. Bots bid the book. · ${vulStr(a.vul)}${a.retry ? ' · retry, not counted' : ''}</p>
+      <${AuctionGrid} a=${a} />
+      ${!over && html`<p class="callinfo">${a.calls.length === 0 ? (a.dealer === 0 ? 'You deal.' : `${NAMES[a.dealer]} deals.`) : a.turn !== 0 ? `${NAMES[a.turn]} thinking…` : ''}</p>`}
       ${over && html`<p class="callinfo"><b>${contractLabel(a)}</b></p>`}
     <//>
 
     ${over && html`<div class="verdict ${a.match ? 'good' : 'bad'}">
-      <b>${a.match ? 'You landed the system contract.' : 'The book went elsewhere.'}</b>
-      <span class="call">Your auction: ${auctionLineOf(a)} → ${contractLabel(a)}</span>
+      <b>${a.match ? (a.retry ? 'Cleared on the retry.' : 'You landed the system contract.') : 'The book went elsewhere.'}</b>
+      ${div && html`<span class="call diverge">Call ${divIdx + 1} is where you left the book: you bid ${callLabel(div.call)}, the book bids ${callLabel(div.sys)}. ${div.why}${a.match ? ' You wandered back to the same contract anyway.' : ''}</span>`}
       ${!a.match && html`<span class="call">Book auction: ${auctionLineOf(a.sys)} → ${contractLabel(a.sys)}</span>`}
       <span class="call">Matched ${g.matched}/${g.hands} this session</span>
-      <button class="big" onClick=${next}>Next deal</button>
+      <div class="btnrow">
+        <button class="big" onClick=${next}>Next deal</button>
+        ${!a.match && html`<button class="hint" onClick=${again}>↩ Bid it again</button>`}
+      </div>
     </div>`}
     ${over && [2, 1, 3].map(seat => html`<div class="reveal">
       <p class="callinfo">${NAMES[seat]}${seat === 2 ? ' (partner)' : ''} · ${hcp(a.hands[seat])} HCP</p>
       <${Hand} cards=${a.hands[seat]} toView=${toView} />
     </div>`)}
 
-    ${myCall && html`<${CallButtons} a=${a} onCall=${b => { makeCall(a, 0, b); bump(); }} />`}
-    ${myCall && g.coach && (() => {
+    ${myCall && html`<${BidBox} a=${a} onCall=${callAs} onUndo=${undoCall} canUndo=${g.myCalls.length > 0} />`}
+    ${myCall && g.coach && !g.peek && html`<button class="hint peek" onClick=${() => { g.peek = true; bump(); }}>💡 hint</button>`}
+    ${myCall && g.coach && g.peek && (() => {
       const adv = adviseCall(a, 0);
       return html`<${CoachNote} text=${`System: ${callLabel(adv.call)}. ${adv.why}`} />`;
     })()}
+    ${!over && g.coach && html`<${AfterNote} last=${g.lastAdvice} />`}
 
     <div class="btnrow wrap controls-row">
       <span class="scene">Openings:</span>
@@ -401,6 +499,17 @@ const LEARN_KEY = 'finesse.bridge.learn';
 const loadLearn = () => { try { return JSON.parse(localStorage.getItem(LEARN_KEY)) || {}; } catch { return {}; } };
 const saveLearn = m => localStorage.setItem(LEARN_KEY, JSON.stringify(m));
 
+// The miss queue: every hand you get wrong is owed back. It is served FIRST
+// next practice, and only a correct answer clears it (spaced error review).
+const MISS_KEY = 'finesse.bridge.misses';
+const loadMisses = () => { try { return JSON.parse(localStorage.getItem(MISS_KEY)) || {}; } catch { return {}; } };
+const saveMisses = m => localStorage.setItem(MISS_KEY, JSON.stringify(m));
+function settleMiss(convId, scene, right) {
+  const m = loadMisses();
+  m[convId] = settleMissQueue(m[convId] || [], scene, right);
+  saveMisses(m);
+}
+
 const NumRow = ({ tiles }) => html`<div class="numrow">
   ${tiles.map(t => html`<div class="numtile"><b>${t.big}</b><span>${t.small}</span>${t.hook && html`<i>${t.hook}</i>`}</div>`)}
 </div>`;
@@ -416,7 +525,20 @@ function ConvCard({ cv, st, record }) {
   const [picked, setPicked] = useState(null);
   const streak = st ? Math.min(st.streak, 5) : 0;
   const canPractice = PRACTICE_IDS.includes(cv.id);
-  const deal = () => { setScene(practiceScene(cv.id)); setPicked(null); };
+  const owed = (loadMisses()[cv.id] || []).length;
+  const deal = () => {
+    const q = loadMisses()[cv.id] || [];
+    setScene(q.length ? { ...q[0], review: true } : practiceScene(cv.id));
+    setPicked(null);
+  };
+  const answer = id => {
+    setPicked(id);
+    const ok = id === scene.answer;
+    // review hands are recall from working memory, not retrieval: they clear
+    // the debt but never feed the mastery streak
+    if (!scene.review) record(cv.id, ok);
+    settleMiss(cv.id, scene, ok);
+  };
   const right = scene && picked !== null && picked === scene.answer;
 
   return html`<details class="conv" key=${cv.id} ...${scene ? { open: true } : {}}>
@@ -430,20 +552,21 @@ function ConvCard({ cv, st, record }) {
       <ul>${cv.schedule.map(s => html`<li>${s}</li>`)}</ul>
       <p class="coachnote">⚠ ${cv.trap}</p>
       ${canPractice && html`<div class="btnrow">
-        <button class="big" onClick=${deal}>Practice this</button>
+        <button class="big" onClick=${deal}>${owed ? `Practice · ${owed} owed` : 'Practice this'}</button>
         ${st && st.total > 0 && html`<span class="stats">${st.right}/${st.total} hands</span>`}
       </div>`}
     </div>`}
     ${scene && html`<div>
+      ${scene.review && html`<p class="stats">Review: you owed this hand from last time.</p>`}
       <${Strip} calls=${scene.strip} />
       <p class="scene">${scene.prompt}</p>
       <${Hand} cards=${scene.hand} toView=${toView} />
       <p class="stats">${hcp(scene.hand)} HCP</p>
       ${picked === null && html`<div class="btnrow wrap">
-        ${scene.choices.map(ch => html`<button class="big" onClick=${() => { setPicked(ch.id); record(cv.id, ch.id === scene.answer); }}>${ch.label}</button>`)}
+        ${scene.choices.map(ch => html`<button class="big" onClick=${() => answer(ch.id)}>${ch.label}</button>`)}
       </div>`}
       ${picked !== null && html`<div class="verdict ${right ? 'good' : 'bad'}">
-        <b>${right ? 'Locked in.' : 'Not yet.'}</b>
+        <b>${right ? (scene.review ? 'Debt cleared.' : 'Locked in.') : (scene.review ? 'Still owed.' : 'Not yet.')}</b>
         <span class="call">${(scene.choices.find(c => c.id === scene.answer) || {}).label}: ${scene.why}</span>
         <span class="call hookline">${cv.hook}</span>
         <div class="btnrow">

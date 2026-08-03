@@ -402,6 +402,24 @@ const GEN = {
 
 export const PRACTICE_IDS = Object.keys(GEN);
 
+// Pure miss-queue transform (storage stays in the UI layer): wrong first-try
+// hands are owed back, capped and deduped; a correct review clears the debt,
+// a wrong review rotates it to the back of the line.
+export function settleMissQueue(q, scene, right) {
+  const out = [...q];
+  if (scene.review) {
+    if (right) out.shift();
+    else if (out.length > 1) out.push(out.shift());
+  } else if (!right) {
+    const key = scene.hand.join('');
+    if (!out.some(s => s.hand.join('') === key) && out.length < 10) {
+      const { hand, strip, prompt, choices, answer, why } = scene;
+      out.push({ hand, strip, prompt, choices, answer, why });
+    }
+  }
+  return out;
+}
+
 export function practiceScene(convId, rng = Math.random) {
   const gens = GEN[convId];
   if (!gens) return null;
