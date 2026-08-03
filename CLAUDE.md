@@ -74,7 +74,7 @@ header comment of each study section / game file.
   book, money margins are statistically zero, so the test asserts the deeper
   rules fire only at the deeper levels). Plus a 200-hand book-proctor
   invariant test and a hard-rules test (forbidden DOM sinks anywhere, sw.js
-  finesse- prefix + cacheName scoping). `npm test` (76 tests).
+  finesse- prefix + cacheName scoping). `npm test` (80 tests).
 
 ## Adding a game
 1. `<game>.engine.js` (pure) + `<game>.coach.js` (pure) + `<game>.js` (module).
@@ -92,10 +92,15 @@ header comment of each study section / game file.
 - Rook: no table (auction + kitty + discard loop unbuilt).
 - Bridge: engine has doubles/redoubles + full duplicate scoring (doubled,
   redoubled, vulnerability rotation with dealer); bots make takeout doubles,
-  advance them, and 1NT-overcall, with two-round rebids (opener + responder).
-  Remaining ceilings: no negative doubles, bots read every double as takeout
-  and never redouble or double for penalty, no weak-two 2NT feature ask, no
-  2/1 system toggle.
+  negative doubles (partner opened + suit overcall through 2S: X = the unbid
+  major, exactly 4; opener advances cheap/jump-16+/NT-with-stopper), penalty
+  doubles of 1NT (15+ sitting over it; partner sits unless bust with a long
+  suit), 1NT overcalls, the weak-two 2NT feature ask (responder 14-16 with a
+  fit asks; opener shows an outside A/K with a max, rebids the suit with a
+  min), with two-round rebids (opener + responder). Doubles are read by
+  context: suit bid = takeout/negative, notrump = penalty. Remaining
+  ceilings: bots never redouble and never penalty-double a suit contract;
+  no 2/1 system toggle.
 - Wergin book (archive.org, borrow-only) pending an archive.org login. Optional now.
 - Strupp book ("How to Play Winning 5 Handed Sheepshead") is the PRIMARY
   sheepshead strategy source (reference material kept privately, off-repo). The
@@ -104,6 +109,6 @@ header comment of each study section / game file.
   are secondary.
 
 ## Verify
-- `npm test` (76 tests)
+- `npm test` (80 tests)
 - `npx serve` at repo root; hard-refresh twice for sw.js.
 - Icons: `node tools/make-icons.mjs`.

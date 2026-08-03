@@ -9,7 +9,7 @@
 import { SUITS, RANKS, hcp, sortHand, suitCards, newAuction, makeCall } from './bridge.engine.js';
 import {
   openingBid, responseTo, staymanReply, transferReply, blackwoodReply,
-  botCall, callLabel, aces, getOpenMin,
+  botCall, callLabel, aces, getOpenMin, advanceNegative, featureReply,
 } from './bridge.bid.js';
 
 // Ask the real bot: RHO (seat 3) opens, what does the solid bot call in our
@@ -18,6 +18,15 @@ function botOvercallSeat(open, hand) {
   const a = newAuction(3, [hand, [], [], []]);
   makeCall(a, 3, open);
   return botCall(a, 0, 'solid');
+}
+
+// Build a full competitive auction (dealer seat, calls in order) and ask the
+// real bot for our seat-0 call, plus the auction object for why-strings.
+function botAuctionSeat(dealer, calls, hand) {
+  const a = newAuction(dealer, [hand, [], [], []]);
+  let s = dealer;
+  for (const c of calls) { makeCall(a, s, c); s = (s + 1) % 4; }
+  return { a, call: botCall(a, 0, 'solid') };
 }
 
 const HON = 'AKQJ';
@@ -213,7 +222,7 @@ const GEN = {
         answer: v.call, why: v.why,
       };
     },
-    rng => { // responding to partner's weak two
+    rng => { // responding to partner's weak two (incl. the 2NT feature ask)
       const su = pick(rng, ['S', 'H']);
       const fit = rng() < 0.7;
       const lens = su === 'S' ? lensOf([fit ? 3 : 1, 4, 3, fit ? 3 : 5]) : lensOf([4, fit ? 3 : 1, 3, fit ? 3 : 5]);
@@ -222,9 +231,29 @@ const GEN = {
       const v = responseTo('2' + su, hand);
       return {
         hand, strip: strip([['Partner', '2' + su], ['RHO', 'P'], ['You', null]]),
-        prompt: `Partner opens a weak ${callLabel('2' + su)}. Further the barrage, bid game, or leave it?`,
+        prompt: `Partner opens a weak ${callLabel('2' + su)}. Further the barrage, ask for a feature, or leave it?`,
         choices: callChoices(['P', '3' + su, '4' + su, '2N']),
         answer: v.call, why: v.why,
+      };
+    },
+    rng => { // opener answers the 2NT feature ask
+      const su = pick(rng, ['H', 'S']);
+      const lens = { S: 2, H: 2, D: 3, C: 2 };
+      lens[su] = 6;
+      const total = Object.values(lens).reduce((x, y) => x + y, 0);
+      lens.D += 13 - total;
+      const max = rng() < 0.5;
+      let hand = buildHand(rng, lens, max ? 9 : 5, max ? 11 : 8);
+      hand = strengthenSuit(rng, hand, su, 2);
+      if (openingBid(hand).call !== '2' + su) return null;
+      const { call } = botAuctionSeat(0, ['2' + su, 'P', '2N', 'P'], hand);
+      const options = ['3C', '3D', '3H', '3S'];
+      if (!options.includes(call)) return null;
+      return {
+        hand, strip: strip([['You', '2' + su], ['LHO', 'P'], ['Partner', '2N'], ['RHO', 'P'], ['You', null]]),
+        prompt: `You opened a weak ${callLabel('2' + su)} and partner bids 2NT, the feature ask. Maximum with an outside honor, or minimum?`,
+        choices: callChoices(options),
+        answer: call, why: featureReply(hand, su).why,
       };
     },
   ],
@@ -341,6 +370,63 @@ const GEN = {
         prompt: `Right-hand opponent opens ${callLabel('1' + their)}. Double, overcall, or pass?`,
         choices: callChoices(['P', 'X', '1S', '1N']),
         answer, why,
+      };
+    },
+  ],
+  negdbl: [
+    rng => { // 1D – (1S): double with 4 hearts, bid 2H with 5 and 10+, pass light
+      const kind = pick(rng, ['x', 'x', 'suit', 'pass']);
+      let hand;
+      if (kind === 'x') hand = buildHand(rng, lensOf([2, 4, 4, 3]), 8, 12);
+      else if (kind === 'suit') hand = buildHand(rng, lensOf([2, 5, 3, 3]), 10, 13);
+      else hand = buildHand(rng, lensOf([3, 4, 3, 3]), 2, 5);
+      const { call } = botAuctionSeat(2, ['1D', '1S'], hand);
+      const wanted = { x: 'X', suit: '2H', pass: 'P' }[kind];
+      if (call !== wanted) return null;
+      const why = {
+        x: `${hcp(hand)} HCP with four hearts and the bid stolen: the negative double IS the heart call, made without the 10 points 2♥ would promise.`,
+        suit: `Five hearts and ${hcp(hand)} HCP: strong enough to bid the suit naturally at the two level. The double would understate it.`,
+        pass: `${hcp(hand)} HCP: nothing to say. The negative double needs 8 at this level, and there is no bid this hand can back up.`,
+      }[kind];
+      return {
+        hand, strip: strip([['Partner', '1D'], ['RHO', '1S'], ['You', null]]),
+        prompt: 'Partner opens 1♦, RHO overcalls 1♠. Is this a negative double?',
+        choices: callChoices(['P', 'X', '2H', '1N']),
+        answer: call, why,
+      };
+    },
+    rng => { // 1D – (1H): X shows EXACTLY four spades; five bids 1S
+      const kind = pick(rng, ['x', 'x', 'five', 'pass']);
+      let hand;
+      if (kind === 'x') hand = buildHand(rng, lensOf([4, 2, 4, 3]), 6, 11);
+      else if (kind === 'five') hand = buildHand(rng, lensOf([5, 2, 3, 3]), 6, 11);
+      else hand = buildHand(rng, lensOf([3, 3, 3, 4]), 0, 5);
+      const { call } = botAuctionSeat(2, ['1D', '1H'], hand);
+      const wanted = { x: 'X', five: '1S', pass: 'P' }[kind];
+      if (call !== wanted) return null;
+      const why = {
+        x: `Exactly four spades: the negative double. Bidding 1♠ would promise five; the double keeps the message precise.`,
+        five: `Five spades bid themselves: 1♠. The negative double here would deny the fifth spade.`,
+        pass: `${hcp(hand)} HCP: even the one-level negative double needs 6. Pass.`,
+      }[kind];
+      return {
+        hand, strip: strip([['Partner', '1D'], ['RHO', '1H'], ['You', null]]),
+        prompt: 'Partner opens 1♦, RHO overcalls 1♥. Double, or bid the spades yourself?',
+        choices: callChoices(['P', 'X', '1S', '2D']),
+        answer: call, why,
+      };
+    },
+    rng => { // opener advances partner's negative double
+      const strong = rng() < 0.4;
+      const hand = buildHand(rng, lensOf([2, 4, 5, 2]), strong ? 16 : 12, strong ? 18 : 14);
+      if (openingBid(hand).call !== '1D') return null;
+      const { a, call } = botAuctionSeat(0, ['1D', '1S', 'X', 'P'], hand);
+      if (!['2H', '3H'].includes(call)) return null;
+      return {
+        hand, strip: strip([['You', '1D'], ['LHO', '1S'], ['Partner', 'X'], ['RHO', 'P'], ['You', null]]),
+        prompt: 'You opened 1♦, LHO overcalled 1♠, partner doubles: negative, showing hearts. Your call?',
+        choices: callChoices(['P', '2H', '3H', '2D']),
+        answer: call, why: advanceNegative(a, 0, hand).why,
       };
     },
   ],

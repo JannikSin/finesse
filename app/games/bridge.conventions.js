@@ -118,7 +118,7 @@ export const CONVENTIONS = [
     schedule: [
       'Partner raises to 3 as a FURTHER preempt, not an invitation. Opener always passes it.',
       'Partner bids game with an opening hand and a fit: part preempt, part hope.',
-      '2NT by partner asks for a feature (an outside ace or king) with a maximum. (The bots here do not ask yet.)',
+      '2NT by partner (14-16 with a fit) asks for a feature: opener shows an outside ace or king with a maximum, rebids the suit with a minimum. The bots ask and answer it.',
       'A new suit by partner is forcing one round.',
     ],
     trap: 'A weak two with a side 4-card major, or on a 5-card suit, backfires: partner cannot judge. Six cards, most honors inside the suit.',
@@ -208,12 +208,35 @@ export const CONVENTIONS = [
       'Doubler bidding a new suit afterwards shows 17+, too strong for a simple overcall.',
       'Double is for takeout when partner has not bid and the doubler acts at their first turn over a suit bid.',
       'The price of being wrong: doubled contracts score double trick values plus a 50 insult; doubled undertricks climb 100/300/500 (200/500/800 vulnerable), and a redouble doubles it all again.',
-      'House bot habit: the bots here treat EVERY double as takeout, so a partner bot will run from your low-level penalty double. Penalty doubles are safe only when no cheap suit is left to run to.',
+      'House bot reading: a double of a SUIT bid is takeout (or negative when partner opened); a double of NOTRUMP is penalty and the partner bot sits for it. The bots never redouble, and never double a low suit contract for penalty.',
     ],
     trap: 'Doubling with a flat hand and length in their suit: that is a penalty pass shape, not takeout. And never pass partner\'s takeout double for lack of points.',
     quiz: [
       { q: 'Right-hand opponent opens 1♥. You hold 13 HCP, singleton heart, 4 cards in each other suit. Your call?', choices: ['Pass', '1NT', 'Double', '2♣'], a: 2, why: 'The perfect takeout double: opening values, shortness in theirs, support everywhere else.' },
       { q: 'Partner doubles their 1♦ opening for takeout. You hold 2 HCP. Your call?', choices: ['Pass', 'Your cheapest 4-card suit', '1NT', 'Redouble'], a: 1, why: 'The double commands a bid: pass turns it into penalty with your side outgunned. Scrape up the cheapest suit.' },
+    ],
+  },
+  {
+    id: 'negdbl', name: 'Negative Double', bid: '1x – (1y) – Dbl', drill: false,
+    hook: 'They stole your bid? Double bids it for you: X = the unbid major, exactly FOUR cards. With five, bid the suit itself.',
+    numbers: [
+      { big: '4', small: 'cards, unbid major' },
+      { big: '6/8', small: 'pts: 1-lvl / 2-lvl' },
+      { big: '2♠', small: 'negative through here' },
+    ],
+    when: 'Partner opens one of a suit and RHO overcalls (through 2♠). Your double is NOT penalty: it shows the unbid major(s) — the hand that wanted to bid a 4-card major and had the bid stolen.',
+    schedule: [
+      'After 1♣/1♦ – (1♥): double shows EXACTLY four spades. With five, bid 1♠ yourself.',
+      'After 1x – (1♠): double shows 4+ hearts, without the 10 points a 2♥ bid would promise.',
+      'After 1♣ – (1♦): double shows 4-4 in both majors; opener picks.',
+      'Points: 6+ when the implied bid sits at the one level, 8+ at the two level.',
+      'Opener answers like a takeout double: bids the shown major cheaply, jumps with 16+, or shows a stopper in notrump.',
+    ],
+    trap: 'Doubling with five spades after 1m – (1♥): partner reads exactly four and may pass a 4-3 game. And passing with the perfect negative-double hand sells out the whole major suit.',
+    quiz: [
+      { q: 'Partner opens 1♦, RHO overcalls 1♠. You hold 8 HCP and four hearts. Your call?', choices: ['Pass', '2♥', 'Double', '1NT'], a: 2, why: '2♥ would promise 10+ points. The negative double IS the heart bid on this hand: 4+ hearts, 8+ at the two level.' },
+      { q: 'After 1♣ – (1♥) – Dbl, how many spades did the doubler promise?', choices: ['3+', 'Exactly 4', '5+', 'Any number'], a: 1, why: 'Exactly four: with five spades the doubler bids 1♠ instead. That precision is the whole convention.' },
+      { q: 'Partner opens 1♥, RHO overcalls 2♣, you double. What is opener expected to do?', choices: ['Pass for penalty', 'Bid spades (your shown major)', 'Rebid hearts always', 'Redouble'], a: 1, why: 'The negative double shows the unbid major, spades here. Opener bids them cheaply, jumping with extras, exactly like advancing a takeout double.' },
     ],
   },
   {

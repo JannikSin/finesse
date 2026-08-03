@@ -347,3 +347,79 @@ test('bridge: miss queue transform (owed hands, cap, dedupe, review)', async () 
   assert.equal(roundtrip.length, 1);
   assert.equal(typeof roundtrip[0].prompt, 'string');
 });
+
+test('bridge: negative doubles fire, natural bids stay natural', async () => {
+  const { negativeDouble } = await import('../app/games/bridge.bid.js');
+  const seatBot = (dealer, calls, hand) => {
+    const a = B.newAuction(dealer, [hand, [], [], []]);
+    let s = dealer;
+    for (const c of calls) { B.makeCall(a, s, c); s = (s + 1) % 4; }
+    return botCall(a, 0, 'solid');
+  };
+  // 1D - (1S): four hearts, 11 HCP -> negative double
+  const fourH = ['KH', 'QH', '7H', '6H', 'AD', '8D', '7D', '6D', '9S', '8S', 'QC', '3C', '2C'];
+  assert.equal(seatBot(2, ['1D', '1S'], fourH), 'X');
+  // same shape at 6 HCP: two-level negative double needs 8
+  const weak = ['QH', 'JH', '7H', '6H', 'KD', '8D', '7D', '6D', '9S', '8S', '4C', '3C', '2C'];
+  assert.equal(negativeDouble('1D', '1S', weak), null);
+  // 1D - (1H): EXACTLY four spades doubles, five spades bid 1S
+  const fourS = ['AS', 'QS', '8S', '2S', 'KD', '7D', '6D', '5D', '9H', '8H', 'QC', '3C', '2C'];
+  assert.equal(seatBot(2, ['1D', '1H'], fourS), 'X');
+  const fiveS = ['AS', 'QS', '8S', '3S', '2S', 'KD', '7D', '6D', '9H', '8H', 'QC', '3C', '2C'];
+  assert.equal(seatBot(2, ['1D', '1H'], fiveS), '1S');
+  // 1D - (1S): five hearts with 11 HCP bids 2H naturally, not X
+  const fiveH = ['AH', 'QH', '8H', '3H', '2H', 'KD', '7D', '6D', '9S', '8S', 'QC', '3C', '2C'];
+  assert.equal(seatBot(2, ['1D', '1S'], fiveH), '2H');
+  // opener advances the double: cheap with a minimum, jump with 16+
+  const minOpen = ['AH', 'KH', '6H', '5H', 'AD', 'KD', '8D', '7D', '6D', '8S', '7S', '3C', '2C'];
+  assert.equal(seatBot(0, ['1D', '1S', 'X', 'P'], minOpen), '2H');
+  const bigOpen = ['AH', 'KH', 'QH', '5H', 'AD', 'KD', '8D', '7D', '6D', '8S', '7S', 'KC', '2C'];
+  assert.equal(seatBot(0, ['1D', '1S', 'X', 'P'], bigOpen), '3H');
+});
+
+test('bridge: weak-two 2NT feature ask, both seats', async () => {
+  const { featureReply } = await import('../app/games/bridge.bid.js');
+  // responder: 14-16 with a fit asks, 17+ just bids game
+  const ask = ['AS', 'KS', '7S', '6S', 'QH', '8H', '2H', 'AD', '8D', '7D', 'QC', '3C', '2C'];
+  assert.equal(responseTo('2H', ask).call, '2N');
+  const drive = ['AS', 'KS', 'QS', '6S', 'QH', '8H', '2H', 'AD', 'KD', '7D', 'QC', '3C', '2C'];
+  assert.equal(responseTo('2H', drive).call, '4H');
+  // opener: maximum shows the outside honor, minimum rebids the suit
+  const maxHand = ['KH', 'QH', 'JH', '9H', '8H', '7H', 'KD', '5D', '4D', '3S', '2S', '3C', '2C'];
+  assert.equal(featureReply(maxHand, 'H').call, '3D');
+  const minHand = ['KH', 'QH', 'JH', '9H', '8H', '7H', '6D', '5D', '4D', '3S', '2S', '3C', '2C'];
+  assert.equal(featureReply(minHand, 'H').call, '3H');
+  // full bot loop: ask answered, game reached over a feature
+  const a = B.newAuction(0, [
+    ['KH', 'QH', 'JH', '9H', '8H', '7H', 'KD', '5D', '4D', '3S', '2S', '3C', '2C'],
+    ['6S', '5S', '4S', '6H', '5H', '4H', 'JD', '9D', '8D', '7C', '6C', '5C', '4C'],
+    ['AS', 'KS', '7S', '6S', 'QH', '8H', '2H', 'AD', '8D', '7D', 'QC', '3C', '2C'],
+    ['QS', 'JS', 'TS', '9S', '8S', 'TH', '3H', 'QD', 'TD', '2D', 'KC', 'TC', '9C'],
+  ]);
+  let guard = 0;
+  while (a.phase === 'auction' && guard++ < 30) {
+    B.makeCall(a, a.turn, botCall(a, a.turn, 'solid'));
+  }
+  assert.equal(a.phase, 'play');
+  assert.deepEqual(a.calls.slice(0, 6), ['2H', 'P', '2N', 'P', '3D', 'P']);
+  assert.equal(a.contract.bid, '4H');
+});
+
+test('bridge: doubles of notrump read as penalty', () => {
+  const mk = (dealer, hands) => B.newAuction(dealer, hands);
+  const doubler = ['AS', 'KS', '2S', 'QH', 'JH', '3H', 'AD', '4D', '5D', 'KC', '6C', '7C', '8C']; // 16
+  const sitter = ['KS', '5S', '4S', 'TH', '8H', '6H', '5H', 'QD', '8D', '3D', 'JC', '9C', '2C']; // 6
+  const bust = ['JC', '9C', '8C', '7C', '6C', '2C', '5S', '4S', '3S', '8D', '3D', '6H', '5H']; // 1, six clubs
+  // 15+ sitting over their 1NT doubles for penalty
+  let a = mk(3, [doubler, [], [], ['2H', '2D', '2C', '2S', '3C', '3D', '3H', '3S', '4C', '4D', '4H', '4S', '5C']]);
+  B.makeCall(a, 3, '1N');
+  assert.equal(botCall(a, 0, 'solid'), 'X');
+  // partner of the doubler sits with any values
+  B.makeCall(a, 0, 'X');
+  B.makeCall(a, 1, 'P');
+  a.hands[2] = sitter;
+  assert.equal(botCall(a, 2, 'solid'), 'P');
+  // but runs from a bust with a long suit
+  a.hands[2] = bust;
+  assert.equal(botCall(a, 2, 'solid'), '2C');
+});
