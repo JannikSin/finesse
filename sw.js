@@ -1,5 +1,6 @@
-﻿const CACHE = 'finesse-v13';
+﻿const CACHE = 'finesse-v14';
 const PRECACHE = [
+  './suggest.js',
   './',
   './index.html',
   './manifest.webmanifest',
