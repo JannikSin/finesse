@@ -5,13 +5,17 @@
 // session can read a per-app list instead of guessing what "the button is
 // wrong" referred to.
 //
-// Self-contained on purpose: no imports, no build step, no framework. Seven
-// apps with seven different module setups (importmaps, app/main.js, plain
+// Self-contained on purpose: no imports, no build step, no framework. Eight
+// apps with eight different module setups (importmaps, app/main.js, plain
 // modules) all take a plain <script src="./suggest.js"></script>.
 //
-// All seven PWAs share the janniksin.github.io origin, so localStorage is
-// shared and the Crystal key ("crystal.key") is already there once Crystal has
-// been opened. No second login.
+// No key, no login, nothing to paste (David, 2026-08-26). The Worker accepts a
+// keyless POST on the two Desk write routes, so a note or a recording sends the
+// moment he taps Send. If a Crystal key happens to already be in localStorage
+// it rides along as provenance; it is never required and never asked for.
+//
+// The mic is here on purpose: most of these notes are spoken while walking, so
+// every app gets the recorder, not just the ones that grew one.
 //
 // Retire it for one app by deleting the script tag. Silence it everywhere for
 // a session with localStorage.setItem("suggest.off", "1").
@@ -36,7 +40,14 @@
     try { localStorage.setItem(QUEUE_KEY, JSON.stringify(v)); return true; }
     catch (e) { return false; }
   }
+  // Optional. Present on David's own phone because Crystal shares this origin;
+  // absent everywhere else and that is fine. Never gate on it.
   function keyOf() { return localStorage.getItem("crystal.key") || ""; }
+  function authHeaders(base) {
+    var k = keyOf();
+    if (k) base["x-brief-key"] = k;
+    return base;
+  }
 
   // The page you were looking at. Every one of these apps is hash-routed, so
   // the hash IS the page; strip the leading #/ and keep it short.
@@ -45,25 +56,78 @@
     return h.slice(0, 80) || "home";
   }
 
+  // ---------- the audio queue ----------
+  // Voice notes must work on a train: blobs are too big for localStorage, so
+  // they queue in their own tiny IndexedDB store and flush exactly like the
+  // text queue when signal returns. A 4xx (not 401) means the Worker refused
+  // these bytes forever; drop them rather than retry a poisoned blob.
+  function adb() {
+    return new Promise(function (res, rej) {
+      var r = indexedDB.open("suggest-audio", 1);
+      r.onupgradeneeded = function () {
+        r.result.createObjectStore("blobs", { keyPath: "id", autoIncrement: true });
+      };
+      r.onsuccess = function () { res(r.result); };
+      r.onerror = function () { rej(r.error); };
+    });
+  }
+  function atx(mode, fn) {
+    return adb().then(function (db) {
+      return new Promise(function (res, rej) {
+        var t = db.transaction("blobs", mode);
+        var out = fn(t.objectStore("blobs"));
+        t.oncomplete = function () { res(out && out.result !== undefined ? out.result : out); };
+        t.onerror = function () { rej(t.error); };
+      });
+    });
+  }
+  function aAdd(rec) { return atx("readwrite", function (s) { return s.add(rec); }); }
+  function aAll() {
+    return atx("readonly", function (s) { return s.getAll(); })
+      .then(function (v) { return v || []; })
+      .catch(function () { return []; });
+  }
+  function aDel(id) { return atx("readwrite", function (s) { return s.delete(id); }); }
+
+  var aSending = false;
+  function aFlush() {
+    if (aSending || !navigator.onLine) return;
+    aAll().then(function (all) {
+      if (!all.length) return;
+      aSending = true;
+      var item = all[0];
+      fetch(WORKER + "/deskaudio?app=" + encodeURIComponent(item.app)
+          + "&route=" + encodeURIComponent(item.route), {
+        method: "POST",
+        headers: authHeaders({ "content-type": item.type || "audio/mp4" }),
+        body: item.blob,
+      }).then(function (r) {
+        aSending = false;
+        // 401 still means retry: the send is keyless now, so a 401 is the
+        // Worker being mid-deploy, not these bytes being unwelcome.
+        if (r.ok || (r.status >= 400 && r.status < 500 && r.status !== 401)) {
+          aDel(item.id).then(function () { paintCount(); aFlush(); });
+        }
+      }).catch(function () { aSending = false; });
+    });
+  }
+
   // ---------- the pipe ----------
   var sending = false;
   function flush() {
     if (sending || !navigator.onLine) return;
     var q = qGet();
     if (!q.length) return;
-    var k = keyOf();
-    if (!k) return;                        // no key yet; the note waits, never lost
     sending = true;
     var item = q[0];
     fetch(WORKER + "/desk", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-brief-key": k },
+      headers: authHeaders({ "content-type": "application/json" }),
       body: JSON.stringify(item),
     }).then(function (r) {
       sending = false;
-      // /desk is built to return no 4xx but 401, so anything non-401 that is
-      // not ok is transient and the note stays queued. 401 also stays queued:
-      // the key is wrong, not the note.
+      // /desk is built to return no 4xx but 401, so anything that is not ok is
+      // transient and the note stays queued. Nothing is ever dropped.
       if (r.ok) {
         var q2 = qGet();
         q2.shift();
@@ -75,31 +139,13 @@
   }
 
   // ---------- UI ----------
-  var css =
-    ".sg-btn{position:fixed;right:12px;bottom:76px;z-index:2147483000;width:44px;height:44px;" +
-    "border-radius:50%;border:1px solid rgba(255,255,255,.28);background:#1b1d24;color:#fff;" +
-    "font:600 19px/1 system-ui,sans-serif;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4);" +
-    "display:flex;align-items:center;justify-content:center;padding:0}" +
-    ".sg-btn:focus-visible{outline:2px solid #7cc4ff;outline-offset:2px}" +
-    ".sg-badge{position:absolute;top:-4px;right:-4px;min-width:17px;height:17px;border-radius:9px;" +
-    "background:#c2410c;color:#fff;font:600 11px/17px system-ui,sans-serif;text-align:center;padding:0 3px}" +
-    ".sg-wrap{position:fixed;inset:0;z-index:2147483001;background:rgba(0,0,0,.45);" +
-    "display:flex;align-items:flex-end;justify-content:center}" +
-    ".sg-panel{width:100%;max-width:560px;background:#15171d;color:#f2f4f8;border-radius:14px 14px 0 0;" +
-    "padding:14px 14px calc(14px + env(safe-area-inset-bottom));" +
-    "font:15px/1.45 system-ui,-apple-system,sans-serif;box-shadow:0 -8px 30px rgba(0,0,0,.5)}" +
-    ".sg-panel h2{margin:0 0 2px;font-size:15px;font-weight:650}" +
-    ".sg-where{margin:0 0 10px;font-size:12.5px;opacity:.62}" +
-    ".sg-panel textarea,.sg-panel input{width:100%;box-sizing:border-box;background:#0e1015;" +
-    "color:#f2f4f8;border:1px solid #333844;border-radius:9px;padding:10px;font:inherit;resize:vertical}" +
-    ".sg-row{display:flex;gap:8px;align-items:center;margin-top:9px}" +
-    ".sg-row button{flex:0 0 auto;border-radius:9px;border:1px solid #333844;background:#232733;" +
-    "color:#f2f4f8;font:inherit;padding:9px 15px;cursor:pointer}" +
-    ".sg-send{background:#2563eb !important;border-color:#2563eb !important;font-weight:600}" +
-    ".sg-stat{font-size:12.5px;opacity:.72;margin-left:auto;text-align:right}";
-
-  var style = document.createElement("style");
-  style.textContent = css;
+  // The sheet is a linked same-origin file (see suggest.css). A <style> element
+  // injected from script is blocked by these apps' style-src 'self', so the
+  // button rendered unstyled everywhere until this moved out of the script.
+  var SELF = document.currentScript && document.currentScript.src;
+  var style = document.createElement("link");
+  style.rel = "stylesheet";
+  style.href = new URL("suggest.css", SELF || location.href).href;
 
   var btn = document.createElement("button");
   btn.type = "button";
@@ -113,9 +159,12 @@
   btn.appendChild(badge);
 
   function paintCount() {
-    var n = qGet().length;
-    badge.hidden = n === 0;
-    badge.textContent = n > 9 ? "9+" : String(n);
+    // the badge counts everything still waiting to send, spoken included
+    aAll().then(function (a) {
+      var n = qGet().length + a.length;
+      badge.hidden = n === 0;
+      badge.textContent = n > 9 ? "9+" : String(n);
+    });
   }
 
   function openPanel() {
@@ -140,6 +189,64 @@
 
     var row = document.createElement("div");
     row.className = "sg-row";
+
+    // The mic: same recorder pattern as Crystal's bubble, posting straight to
+    // /deskaudio with this app + page attached, so the drain's faster-whisper
+    // transcript files against this app like a typed note. Online-only on
+    // purpose: an audio blob is too big for the localStorage queue, and a
+    // failed send says so instead of pretending.
+    var mic = document.createElement("button");
+    mic.type = "button";
+    mic.className = "sg-mic";
+    mic.textContent = "🎙";
+    mic.setAttribute("aria-label", "Record the change out loud");
+    var rec = null;
+    var chunks = [];
+    var acquiring = false;
+    var cancelled = false;   // shut() mid-recording means cancel, never send
+    mic.addEventListener("click", function () {
+      if (rec && rec.state === "recording") { rec.stop(); return; }
+      if (acquiring) return;
+      if (!navigator.mediaDevices || !window.MediaRecorder) {
+        stat.textContent = "this browser cannot record; type it";
+        return;
+      }
+      acquiring = true;
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+        acquiring = false;
+        var mime = MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "audio/webm";
+        rec = new MediaRecorder(stream, { mimeType: mime });
+        chunks = [];
+        rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+        rec.onstop = function () {
+          stream.getTracks().forEach(function (t) { t.stop(); });
+          mic.textContent = "🎙";
+          if (cancelled) return;
+          var blob = new Blob(chunks, { type: (chunks[0] && chunks[0].type) || mime });
+          // queue first, send second: a train tunnel between stop and send
+          // must not eat the take
+          aAdd({ app: APP, route: routeNow(), type: blob.type, blob: blob, at: new Date().toISOString() })
+            .then(function () {
+              paintCount();
+              stat.textContent = navigator.onLine
+                ? "recorded; transcribes within the hour"
+                : "recorded; sends when signal returns";
+              aFlush();
+            })
+            .catch(function () {
+              stat.textContent = "this phone would not store the recording";
+            });
+        };
+        rec.start(5000);
+        setTimeout(function () { if (rec && rec.state === "recording") rec.stop(); }, 180000);
+        mic.textContent = "⏹";
+        stat.textContent = "recording... tap to stop";
+      }).catch(function () {
+        acquiring = false;
+        stat.textContent = "mic unavailable; type it instead";
+      });
+    });
+
     var send = document.createElement("button");
     send.type = "button";
     send.className = "sg-send";
@@ -150,23 +257,10 @@
     var stat = document.createElement("span");
     stat.className = "sg-stat";
 
-    // The key is only asked for if this origin has never seen Crystal.
-    var keyInput = null;
-    if (!keyOf()) {
-      keyInput = document.createElement("input");
-      keyInput.type = "password";
-      keyInput.autocomplete = "current-password";
-      keyInput.placeholder = "Crystal key (once per phone)";
-      keyInput.setAttribute("aria-label", "Crystal key");
-      panel.appendChild(h);
-      panel.appendChild(where);
-      panel.appendChild(ta);
-      panel.appendChild(keyInput);
-    } else {
-      panel.appendChild(h);
-      panel.appendChild(where);
-      panel.appendChild(ta);
-    }
+    panel.appendChild(h);
+    panel.appendChild(where);
+    panel.appendChild(ta);
+    row.appendChild(mic);
     row.appendChild(send);
     row.appendChild(close);
     row.appendChild(stat);
@@ -174,6 +268,9 @@
     wrap.appendChild(panel);
 
     function shut() {
+      // closing mid-recording releases the mic AND drops the take: a closed
+      // panel means cancel, so onstop must not upload it
+      if (rec && rec.state === "recording") { cancelled = true; rec.stop(); }
       wrap.remove();
       document.removeEventListener("keydown", onEsc);
       btn.focus();
@@ -186,9 +283,6 @@
     send.addEventListener("click", function () {
       var text = ta.value.trim();
       if (!text) { stat.textContent = "say something first"; return; }
-      if (keyInput && keyInput.value.trim()) {
-        try { localStorage.setItem("crystal.key", keyInput.value.trim()); } catch (e) {}
-      }
       var q = qGet();
       q.push({
         app: APP,
@@ -215,6 +309,7 @@
     document.body.appendChild(btn);
     paintCount();
     flush();
+    aFlush();
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", mount);
@@ -222,6 +317,6 @@
     mount();
   }
 
-  window.addEventListener("online", flush);
-  window.addEventListener("focus", flush);
+  window.addEventListener("online", function () { flush(); aFlush(); });
+  window.addEventListener("focus", function () { flush(); aFlush(); });
 })();
