@@ -1,4 +1,4 @@
-﻿const CACHE = 'finesse-v15';
+﻿const CACHE = 'finesse-v16';
 const PRECACHE = [
   "./suggest.css",
   './suggest.js',
